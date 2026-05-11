@@ -23,7 +23,7 @@ jobs:
     needs: [create-release]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -46,7 +46,7 @@ jobs:
     needs: [create-release, quality-gate]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - name: Set up Go
@@ -85,7 +85,7 @@ jobs:
     needs: [create-release, build]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup awesome-ci
         uses: fullstack-devops/awesome-ci-action@main
 
@@ -117,7 +117,7 @@ jobs:
     needs: [create-release, publish-release]
     steps:
       - name: Check out awesome-ci-action
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: fullstack-devops/awesome-ci-action
           token: ${{ secrets.ACI_REPO_TOKEN }}
