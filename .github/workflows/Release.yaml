@@ -61,7 +61,7 @@ jobs:
           VERSION: "${{ needs.create-release.outputs.version }}"
 
       - name: Setup UPX
-        uses: crazy-max/ghaction-upx@v3
+        uses: crazy-max/ghaction-upx@v4
         with:
           install-only: true
       - name: Compress binaries with upx
