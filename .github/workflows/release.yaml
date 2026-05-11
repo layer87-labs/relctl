@@ -2,8 +2,10 @@ name: Release
 
 on:
   push:
-    tags:
-      - "[0-9]*.[0-9]*.[0-9]*"
+    branches: ["main"]
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
 
 permissions:
   contents: write # create GitHub releases & upload assets
@@ -40,16 +42,15 @@ jobs:
         run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest
 
       - name: Generate changelog
-        run: git-chglog --output /tmp/release-notes.md "${GITHUB_REF_NAME}"
+        run: git-chglog --output /tmp/release-notes.md "$(git describe --tags --abbrev=0 2>/dev/null || echo HEAD)"
 
       - name: Setup awesome-ci
         uses: fullstack-devops/awesome-ci-action@main
 
-      - name: Create Release
+      - name: Collect merged PR infos
         id: tag
         run: |
           awesome-ci release create \
-            --version "${GITHUB_REF_NAME}" \
             --body "/tmp/release-notes.md" \
             > "$GITHUB_STEP_SUMMARY"
         env:
