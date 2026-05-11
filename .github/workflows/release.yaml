@@ -31,6 +31,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Install git-chglog
+        run: go install github.com/git-chglog/git-chglog/cmd/git-chglog@latest
+
+      - name: Generate changelog
+        run: git-chglog --output /tmp/release-notes.md "${GITHUB_REF_NAME}"
+
       - name: Setup awesome-ci
         uses: fullstack-devops/awesome-ci-action@main
 
@@ -39,7 +50,7 @@ jobs:
         run: |
           awesome-ci release create \
             --version "${GITHUB_REF_NAME}" \
-            --body "scripts/release-template.md" \
+            --body "/tmp/release-notes.md" \
             > "$GITHUB_STEP_SUMMARY"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
