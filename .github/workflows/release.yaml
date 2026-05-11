@@ -103,7 +103,7 @@ jobs:
         run: make build/single SUFFIX=${{ matrix.suffix }} EXT=${{ matrix.ext }}
 
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@v4.1.2
 
       - name: Sign binary (keyless via OIDC)
         run: |
