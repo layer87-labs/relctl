@@ -38,6 +38,11 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Fatalln(err)
 	}
 
+	body, err := tools.ReadFileToString(args.Body)
+	if err != nil && !errors.Is(err, tools.ErrEmptyString) {
+		log.Fatalln(err)
+	}
+
 	if args.DryRun {
 		log.Infof("Would create new release with version: %s\n", version)
 
@@ -48,7 +53,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Println("### Info output:")
 		fmt.Printf("Writing new release with version: %s\n", version)
 
-		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, args.ReleaseBranch, args.Body)
+		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, args.ReleaseBranch, body)
 		if err != nil {
 			log.Fatalln(err)
 		}
