@@ -39,7 +39,10 @@ func (ces CES) ExportAsEnv(envVars []KeyValue) (err error) {
 		for _, ev := range envVars {
 			envFile.Set(ev.Name, ev.Value)
 		}
-		envFile.CloseEnvFile(ces.EnvFile)
+		if err := envFile.CloseEnvFile(ces.EnvFile); err != nil {
+			log.Warnln(err)
+			return err
+		}
 	}
 
 	return

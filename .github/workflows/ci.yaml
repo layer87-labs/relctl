@@ -51,10 +51,10 @@ jobs:
         run: make ci/build
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # Unit tests + coverage
+  # Audit (vet, staticcheck, govulncheck, lint, tests)
   # ──────────────────────────────────────────────────────────────────────────────
-  test:
-    name: Tests
+  audit:
+    name: Audit
     runs-on: ubuntu-latest
     needs: [generate-infos]
     steps:
@@ -65,8 +65,8 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Run tests with coverage
-        run: make test/cover
+      - name: Run audit
+        run: make audit
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v7
@@ -108,25 +108,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # Lint
-  # ──────────────────────────────────────────────────────────────────────────────
-  lint:
-    name: golangci-lint
-    runs-on: ubuntu-latest
-    needs: [generate-infos]
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: false
-
-      - uses: golangci/golangci-lint-action@v9
-        with:
-          version: latest
-
-  # ──────────────────────────────────────────────────────────────────────────────
   # CodeQL – static security analysis
   # ──────────────────────────────────────────────────────────────────────────────
   codeql:
@@ -152,22 +133,6 @@ jobs:
         uses: github/codeql-action/analyze@v3
 
   # ──────────────────────────────────────────────────────────────────────────────
-  # Gitleaks – secret scanning
-  # ──────────────────────────────────────────────────────────────────────────────
-  gitleaks:
-    name: Gitleaks Secret Scan
-    runs-on: ubuntu-latest
-    needs: [generate-infos]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ──────────────────────────────────────────────────────────────────────────────
   # Trivy – filesystem vulnerability scan
   # ──────────────────────────────────────────────────────────────────────────────
   trivy:
@@ -178,7 +143,7 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@v0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .

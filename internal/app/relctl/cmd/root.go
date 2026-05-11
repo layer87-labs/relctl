@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/layer87-labs/relctl/internal/app/build"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/connect"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/parse"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/pullrequest"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/release"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/transform"
-	"github.com/layer87-labs/relctl/internal/app/build"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -25,7 +25,7 @@ var RootCmd = &cobra.Command{
 Comatible with CI pipelines like Jenkins and GitHub
 Find more information and examples at: https://github.com/layer87-labs/relctl`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 

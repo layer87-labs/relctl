@@ -91,7 +91,7 @@ func (rc *RcFile) UpdateCreds(server string, repo string, token string) error {
 
 func (rc *RcFile) Save() (err error) {
 	rc.ConnectCreds.TokenPlain = nil
-	os.Truncate(rcFileName, 0)
+	_ = os.Truncate(rcFileName, 0)
 
 	yamlData, err := yaml.Marshal(rc)
 	if err != nil {

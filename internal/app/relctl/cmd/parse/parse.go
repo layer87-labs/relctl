@@ -17,7 +17,7 @@ var Cmd = &cobra.Command{
 	Use:   "parse",
 	Short: "inspect and parse JSON and YAML files to retrieve values, similar to jq with additional features",
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -26,9 +26,9 @@ var jsonCmd = &cobra.Command{
 	Short: "parse a json string or file",
 	Run: func(cmd *cobra.Command, args []string) {
 		if File != "" {
-			parsejy.ParseFile(Query, File, parsejy.JSONSyntax)
+			_ = parsejy.ParseFile(Query, File, parsejy.JSONSyntax)
 		} else {
-			parsejy.Parse(Query, []byte(String), parsejy.JSONSyntax)
+			_ = parsejy.Parse(Query, []byte(String), parsejy.JSONSyntax)
 		}
 	},
 }
@@ -38,9 +38,9 @@ var yamlCmd = &cobra.Command{
 	Short: "parse a yaml string or file",
 	Run: func(cmd *cobra.Command, args []string) {
 		if File != "" {
-			parsejy.ParseFile(Query, File, parsejy.YamlSyntax)
+			_ = parsejy.ParseFile(Query, File, parsejy.YamlSyntax)
 		} else {
-			parsejy.Parse(Query, []byte(String), parsejy.YamlSyntax)
+			_ = parsejy.Parse(Query, []byte(String), parsejy.YamlSyntax)
 		}
 	},
 }
@@ -70,12 +70,12 @@ func init() {
 	yamlCmd.Flags().StringVarP(&Query, "query", "q", "", "(required) query for output")
 	yamlCmd.Flags().StringVarP(&String, "string", "s", "", "query for output")
 
-	jsonCmd.MarkFlagRequired("query")
+	_ = jsonCmd.MarkFlagRequired("query")
 	jsonCmd.MarkFlagsMutuallyExclusive("file", "string")
-	jsonCmd.MarkFlagFilename("file")
+	_ = jsonCmd.MarkFlagFilename("file")
 
-	yamlCmd.MarkFlagRequired("query")
+	_ = yamlCmd.MarkFlagRequired("query")
 	yamlCmd.MarkFlagsMutuallyExclusive("file", "string")
-	yamlCmd.MarkFlagFilename("file")
+	_ = yamlCmd.MarkFlagFilename("file")
 	// exclusive Flags
 }

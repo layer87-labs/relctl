@@ -19,7 +19,7 @@ var Cmd = &cobra.Command{
 	Aliases: []string{"tf"},
 	Short:   "transform given input to json",
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -44,6 +44,6 @@ func init() {
 	groupByCmd.Flags().IntVarP(&GroupPrefixInt, "prefix", "p", 3, "group by prefix until index -- eg.: 'st1_base-image' and int 3, will be grouped by 'st1'")
 	groupByCmd.Flags().IntVarP(&SubstractString, "sub-prefix", "", 0, "remove prefix until index number -- eg.: 'st1_base-image' and 4 will be 'base-image'")
 
-	groupByCmd.MarkFlagRequired("prefix")
+	_ = groupByCmd.MarkFlagRequired("prefix")
 	// exclusive Flags
 }

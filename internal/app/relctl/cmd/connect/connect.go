@@ -21,7 +21,7 @@ creates an encrypted .rc file to persistently connect to GitHub
 soon you can also connect to GitLab (not yet implemented)
 useful without a runner or in an jenkins pipeline`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
@@ -60,8 +60,8 @@ func init() {
 	githubCmd.Flags().StringVarP(&Repository, "repository", "r", "", "(required) repo eg.: octo-org/octo-repo")
 	githubCmd.Flags().StringVarP(&Token, "token", "t", "", "(required) plain token eg.: ghp_*****")
 
-	githubCmd.MarkFlagRequired("repository")
-	githubCmd.MarkFlagRequired("token")
+	_ = githubCmd.MarkFlagRequired("repository")
+	_ = githubCmd.MarkFlagRequired("token")
 
 	// exclusive Flags
 }

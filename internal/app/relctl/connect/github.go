@@ -16,7 +16,9 @@ func UpdateRcFileForGitHub(server string, repo string, token string) {
 	}
 
 	rcFile.UpdateSCMPortalType(rcpersist.SCMPortalTypeGitHub)
-	rcFile.UpdateCreds(server, repo, token)
+	if err := rcFile.UpdateCreds(server, repo, token); err != nil {
+		log.Fatalln(err)
+	}
 
 	if err := rcFile.Save(); err != nil {
 		log.Fatalln(err)

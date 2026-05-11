@@ -17,7 +17,7 @@ var Cmd = &cobra.Command{
 	Short: "Manage GitHub pull requests",
 	Long:  `The pull request command is used to manage GitHub pull requests. It provides subcommands to get pull request info, allowing you to get all infos about a pull request in GitHub.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 

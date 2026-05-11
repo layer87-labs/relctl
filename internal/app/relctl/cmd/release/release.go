@@ -21,7 +21,7 @@ var Cmd = &cobra.Command{
 	Short: "Manage GitHub releases with ease",
 	Long:  `The release command is used to manage GitHub releases. It provides subcommands to create and publish releases, allowing you to automate the release process and integrate it into CI/CD workflows. Use this command to streamline the release tagging and deployment of your software projects.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		cmd.Help()
+		_ = cmd.Help()
 	},
 }
 
