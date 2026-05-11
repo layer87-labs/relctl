@@ -112,8 +112,7 @@ jobs:
           BINARY="build/package/relctl_${VERSION}_${{ matrix.suffix }}${{ matrix.ext }}"
           cosign sign-blob \
             --yes \
-            --output-signature "${BINARY}.sig" \
-            --output-certificate "${BINARY}.pem" \
+            --bundle "${BINARY}.bundle" \
             "${BINARY}"
 
       - name: Install syft (SBOM generator)
