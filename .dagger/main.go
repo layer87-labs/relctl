@@ -1,26 +1,37 @@
 // Package main is the entry point for the l87-relctl Dagger module.
 //
-// l87-relctl exposes release-management helpers for Layer87 CI pipelines:
-//   - CommitHash: short SHA of HEAD (for build metadata)
-//   - Version: latest SemVer git tag (or "dev")
-//   - NextVersion: next bumped version derived from the branch-name prefix
-//
-// Functions are intentionally small and composable so that dagger-pipelines
-// (and other callers) can build higher-level workflows on top.
+// l87-relctl exposes the full relctl CLI as a Dagger module so that CI
+// pipelines can:
+//   - Query git metadata (CommitHash, Version, NextVersion)
+//   - Build the relctl binary from source (Binary)
+//   - Get a pre-authenticated runtime container (Container)
+//   - Create and publish GitHub releases (ReleaseCreate, ReleasePublish)
+//   - Retrieve pull-request information (PrInfo)
 package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"dagger/l-87-relctl/internal/dagger"
 )
 
-// gitImage is the Alpine git image used for all git operations.
-const gitImage = "alpine/git:2"
+const (
+	// gitImage is used for lightweight git operations (no auth needed).
+	gitImage = "alpine/git:2"
+	// goImage is used to compile the relctl binary.
+	goImage = "golang:1.26-alpine"
+	// buildPkg is the Go package path where ldflags inject version info.
+	buildPkg = "github.com/layer87-labs/relctl/internal/app/build"
+	// defaultServer is the GitHub instance used when none is specified.
+	defaultServer = "https://github.com"
+)
 
 // L87Relctl is the root Dagger module type.
 type L87Relctl struct{}
+
+// ─── Git helpers (no auth required) ─────────────────────────────────────────
 
 // gitCtr returns a base container with git and the source mounted at /src.
 func (m *L87Relctl) gitCtr(source *dagger.Directory) *dagger.Container {
@@ -33,9 +44,7 @@ func (m *L87Relctl) gitCtr(source *dagger.Directory) *dagger.Container {
 }
 
 // CommitHash returns the short (7-char) git commit hash of HEAD.
-//
-// The source directory must contain a .git directory (i.e. the root of a
-// git repository). Pass the repo root via --source=. on the command line.
+// Returns "unknown" when the repository has no commits or no .git directory.
 //
 // Example:
 //
@@ -45,13 +54,13 @@ func (m *L87Relctl) CommitHash(ctx context.Context, source *dagger.Directory) (s
 		WithExec([]string{"git", "rev-parse", "--short", "HEAD"}).
 		Stdout(ctx)
 	if err != nil {
-		return "unknown", nil //nolint:nilerr // best-effort, callers fall back to "unknown"
+		return "unknown", nil //nolint:nilerr // best-effort
 	}
 	return strings.TrimSpace(out), nil
 }
 
 // Version returns the latest SemVer git tag reachable from HEAD.
-// Returns "dev" when no tag is found or when the repository has no tags yet.
+// Returns "dev" when no tag is found or the repository has no tags yet.
 //
 // Example:
 //
@@ -70,15 +79,11 @@ func (m *L87Relctl) Version(ctx context.Context, source *dagger.Directory) (stri
 	return v, nil
 }
 
-// NextVersion computes the next SemVer version bump based on the current
-// branch-name prefix convention used in Layer87 repositories:
+// NextVersion computes the next SemVer bump based on the branch-name prefix:
 //
-//   - bugfix/ fix/ patch/ dependabot/ → patch bump
-//   - feature/ feat/ minor/           → minor bump
-//   - major/                          → major bump
-//
-// Returns the bumped version string (e.g. "1.3.0").
-// The base version is the latest tag reachable from HEAD (or "0.0.0" if none).
+//   - bugfix/ fix/ patch/ dependabot/ (and everything else) → patch bump
+//   - feature/ feat/ minor/                                  → minor bump
+//   - major/                                                 → major bump
 //
 // Example:
 //
@@ -98,6 +103,262 @@ func (m *L87Relctl) NextVersion(ctx context.Context, source *dagger.Directory, b
 	}
 	return strings.TrimSpace(out), nil
 }
+
+// ─── Binary build ────────────────────────────────────────────────────────────
+
+// Binary builds the relctl binary from source and returns the compiled file.
+// Version and commit hash are embedded at compile time via ldflags.
+// When not provided, both values are auto-detected from the git history.
+//
+// Example:
+//
+//	dagger call binary --source=. export --path=./out/relctl
+func (m *L87Relctl) Binary(
+	ctx context.Context,
+	source *dagger.Directory,
+	// +optional
+	version string,
+	// +optional
+	commitHash string,
+) *dagger.File {
+	if version == "" {
+		v, _ := m.Version(ctx, source)
+		version = v
+	}
+	if commitHash == "" {
+		h, _ := m.CommitHash(ctx, source)
+		commitHash = h
+	}
+	ldflags := fmt.Sprintf(
+		"-s -w -X %s.Version=%s -X %s.CommitHash=%s",
+		buildPkg, version, buildPkg, commitHash,
+	)
+	return dag.Container().
+		From(goImage).
+		WithMountedCache("/go/pkg/mod", dag.CacheVolume("relctl-go-mod")).
+		WithMountedCache("/root/.cache/go-build", dag.CacheVolume("relctl-go-build")).
+		WithMountedDirectory("/src", source).
+		WithWorkdir("/src").
+		WithEnvVariable("CGO_ENABLED", "0").
+		WithExec([]string{
+			"go", "build",
+			"-ldflags", ldflags,
+			"-o", "/out/relctl",
+			"./cmd/relctl",
+		}).
+		File("/out/relctl")
+}
+
+// ─── Runtime container ───────────────────────────────────────────────────────
+
+// Container returns a minimal Alpine container with the relctl binary and
+// GitHub credentials pre-configured. Use this as an escape hatch to run any
+// relctl subcommand not covered by the typed helper functions.
+//
+// The container is configured in GitHub Actions detection mode so relctl
+// automatically picks up the credentials:
+//   - CI=true
+//   - GITHUB_SERVER_URL=<server>
+//   - GITHUB_REPOSITORY=<repository>
+//   - GITHUB_TOKEN=<token> (injected as a secret — never exposed in logs)
+//
+// The source directory is mounted at /repo and set as the working directory.
+//
+// Example:
+//
+//	dagger call container --source=. --token=env:GITHUB_TOKEN \
+//	  --repository=my-org/my-repo \
+//	  with-exec --args="relctl,release,create,--dry-run" stdout
+func (m *L87Relctl) Container(
+	ctx context.Context,
+	source *dagger.Directory,
+	token *dagger.Secret,
+	repository string,
+	// +optional
+	server string,
+) *dagger.Container {
+	if server == "" {
+		server = defaultServer
+	}
+	return dag.Container().
+		From("alpine:3").
+		WithFile("/usr/local/bin/relctl", m.Binary(ctx, source, "", "")).
+		WithMountedDirectory("/repo", source).
+		WithWorkdir("/repo").
+		WithEnvVariable("CI", "true").
+		WithEnvVariable("GITHUB_SERVER_URL", server).
+		WithEnvVariable("GITHUB_REPOSITORY", repository).
+		WithSecretVariable("GITHUB_TOKEN", token)
+}
+
+// ─── Release commands ────────────────────────────────────────────────────────
+
+// ReleaseCreate creates a new GitHub release by running `relctl release create`.
+// Returns the command stdout which contains the newly created release ID.
+//
+// Example:
+//
+//	dagger call release-create \
+//	  --source=. --token=env:GITHUB_TOKEN --repository=my-org/my-repo
+func (m *L87Relctl) ReleaseCreate(
+	ctx context.Context,
+	source *dagger.Directory,
+	token *dagger.Secret,
+	repository string,
+	// +optional
+	server string,
+	// +optional
+	body string,
+	// +optional
+	patchLevel string,
+	// +optional
+	version string,
+	// +optional
+	mergeSha string,
+	// +optional
+	releaseBranch string,
+	// +optional
+	releasePrefix string,
+	// +optional
+	prNumber int,
+	// +optional
+	dryRun bool,
+	// +optional
+	hotfix bool,
+) (string, error) {
+	args := []string{"relctl", "release", "create"}
+	if body != "" {
+		args = append(args, "--body", body)
+	}
+	if patchLevel != "" {
+		args = append(args, "--patch-level", patchLevel)
+	}
+	if version != "" {
+		args = append(args, "--version", version)
+	}
+	if mergeSha != "" {
+		args = append(args, "--merge-sha", mergeSha)
+	}
+	if releaseBranch != "" {
+		args = append(args, "--release-branch", releaseBranch)
+	}
+	if releasePrefix != "" {
+		args = append(args, "--release-prefix", releasePrefix)
+	}
+	if prNumber != 0 {
+		args = append(args, "--prnumber", fmt.Sprintf("%d", prNumber))
+	}
+	if dryRun {
+		args = append(args, "--dry-run")
+	}
+	if hotfix {
+		args = append(args, "--hotfix")
+	}
+	out, err := m.Container(ctx, source, token, repository, server).
+		WithExec(args).
+		Stdout(ctx)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// ReleasePublish publishes a previously created GitHub release and optionally
+// uploads assets. Run ReleaseCreate first to obtain the release ID.
+//
+// Assets are specified as typed strings:
+//   - "file=<path>"   — upload a single file
+//   - "zip=<dir>"     — zip a directory and upload it
+//   - "tgz=<dir>"     — tar.gz a directory and upload it
+//
+// Example:
+//
+//	dagger call release-publish \
+//	  --source=. --token=env:GITHUB_TOKEN --repository=my-org/my-repo \
+//	  --release-id=12345 \
+//	  --assets=file=./out/relctl_linux_amd64 \
+//	  --assets=file=./out/relctl_linux_arm64
+func (m *L87Relctl) ReleasePublish(
+	ctx context.Context,
+	source *dagger.Directory,
+	token *dagger.Secret,
+	repository string,
+	releaseID int,
+	// +optional
+	server string,
+	// +optional
+	assets []string,
+	// +optional
+	body string,
+	// +optional
+	mergeSha string,
+	// +optional
+	prNumber int,
+) (string, error) {
+	args := []string{
+		"relctl", "release", "publish",
+		"--release-id", fmt.Sprintf("%d", releaseID),
+	}
+	for _, a := range assets {
+		args = append(args, "--asset", a)
+	}
+	if body != "" {
+		args = append(args, "--body", body)
+	}
+	if mergeSha != "" {
+		args = append(args, "--merge-sha", mergeSha)
+	}
+	if prNumber != 0 {
+		args = append(args, "--prnumber", fmt.Sprintf("%d", prNumber))
+	}
+	out, err := m.Container(ctx, source, token, repository, server).
+		WithExec(args).
+		Stdout(ctx)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// ─── Pull-request commands ───────────────────────────────────────────────────
+
+// PrInfo retrieves pull-request information by running `relctl pr info`.
+// Specify either a PR number or the merge commit SHA to identify the PR.
+//
+// Example:
+//
+//	dagger call pr-info \
+//	  --source=. --token=env:GITHUB_TOKEN --repository=my-org/my-repo \
+//	  --number=42
+func (m *L87Relctl) PrInfo(
+	ctx context.Context,
+	source *dagger.Directory,
+	token *dagger.Secret,
+	repository string,
+	// +optional
+	server string,
+	// +optional
+	number int,
+	// +optional
+	mergeSha string,
+) (string, error) {
+	args := []string{"relctl", "pr", "info"}
+	if number != 0 {
+		args = append(args, "--number", fmt.Sprintf("%d", number))
+	}
+	if mergeSha != "" {
+		args = append(args, "--merge-commit-sha", mergeSha)
+	}
+	out, err := m.Container(ctx, source, token, repository, server).
+		WithExec(args).
+		Stdout(ctx)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// ─── Internal helpers ────────────────────────────────────────────────────────
 
 // bumpFromBranch maps a branch-name prefix to a semver bump level.
 func bumpFromBranch(branch string) string {
