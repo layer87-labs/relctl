@@ -1,0 +1,9 @@
+{
+  "workflow": "pr-only",
+  "supervision": "full-control",
+  "defaultBranch": "main",
+  "protectedBranches": [
+    "main",
+    "production"
+  ]
+}

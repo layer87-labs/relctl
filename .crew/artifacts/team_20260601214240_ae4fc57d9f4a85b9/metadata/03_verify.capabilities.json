@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "taskId": "03_verify",
+  "role": "verifier",
+  "agent": "verifier",
+  "runtime": "child-process",
+  "permissionMode": "read_only",
+  "tools": [
+    "bash",
+    "find",
+    "grep",
+    "ls",
+    "read"
+  ],
+  "extensions": [],
+  "skills": {
+    "names": [
+      "runtime-state-reader",
+      "verification-before-done"
+    ],
+    "paths": [
+      "/home/eksrha/.pi/agent/git/github.com/Layer87/layer87-pi-toolkit/node_modules/pi-crew/skills/runtime-state-reader",
+      "/home/eksrha/.pi/agent/git/github.com/Layer87/layer87-pi-toolkit/node_modules/pi-crew/skills/verification-before-done"
+    ],
+    "disabled": false
+  },
+  "model": {
+    "fallbacks": []
+  },
+  "inheritance": {
+    "projectContext": true,
+    "skills": false,
+    "systemPromptMode": "replace"
+  }
+}
