@@ -111,6 +111,8 @@ func init() {
 	Cmd.PersistentFlags().StringVar(&releaseArgs.Version, "version", "", "override version to Update")
 	Cmd.PersistentFlags().StringVarP(&releaseArgs.Body, "body", "b", "", "custom release message (markdown string or file)")
 	Cmd.PersistentFlags().StringVarP(&releaseArgs.PatchLevel, "patch-level", "l", "", "predefine patch level of version to Update")
+	Cmd.PersistentFlags().StringVar(&releaseArgs.VersionScheme, "version-scheme", "", "versioning scheme to use: semver (default) or calver (overrides .relctl.yaml)")
+	Cmd.PersistentFlags().StringVar(&releaseArgs.ConfigFile, "config", "", "path to .relctl.yaml config file")
 
 	// exclusive Flags
 	publishCmd.Flags().Int64VarP(&releaseID, "release-id", "", 0, "publish an early defined release (also looking for env RELCTL_RELEASE_ID)")

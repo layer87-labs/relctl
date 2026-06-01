@@ -33,3 +33,7 @@ docs/_site
 # awesome specialties
 .awesomerc.yaml
 awesome.env
+
+# PI Coding Agent
+.crew/
+.pi-lens/

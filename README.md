@@ -8,42 +8,139 @@
 
 # relctl
 
-**Description**: relctl is the smart connection between your pipeline for continuous integration and GitHub. The focus is on the release process, followed by the version management of [SemVer](https://semver.org/). The required version number is created with the correct naming of the branch prefix.
+**Description**: relctl is a provider-agnostic release management CLI for CI/CD pipelines.
+It supports two versioning schemes – [SemVer](https://semver.org/) and [CalVer](https://calver.org/) –
+and integrates with GitHub, GitHub Enterprise, GitLab, and Jenkins.
 
-- **Technology stack**: This tool is written in golang
-- **Status**: Stable.
-- **Requests and Issues**: Please feel free to open an question or feature request in the Issue Board.
+- **Technology stack**: Go, Cobra CLI
+- **Status**: Stable
 - **Supported environments**:
-  - GitHub & GitHub Enterprise
-  - GitHub actions
+  - GitHub & GitHub Enterprise (GitHub Actions)
+  - GitLab (GitLab CI)
   - Jenkins Pipelines
-- **Sweet Spot**: If you use GitHub or GitHub Enterprise and GitHub Actions, you can use relctl to its full potential!
+- **Versioning schemes**: SemVer (branch-prefix driven) · CalVer (date-based, git-tag driven)
 
 ## Getting Started
 
-You can use this tool in your CI pipeline or locally on your command line. Just [download](https://github.com/layer87-labs/relctl/releases/latest/download/relctl) the most recently released version and get started.
+Download the [latest release](https://github.com/layer87-labs/relctl/releases/latest/download/relctl)
+and add it to your `PATH`, or use the
+[layer87-labs/relctl-action](https://github.com/layer87-labs/relctl-action) in GitHub Actions.
+
+## Versioning Schemes
+
+### SemVer (default)
+
+relctl derives the SemVer bump level from the source branch name:
+
+| Branch prefix | Bump |
+|---|---|
+| `bugfix/`, `fix/`, `patch/`, `dependabot/` | Patch |
+| `feature/`, `feat/`, `minor/` | Minor |
+| `major/` | Major |
+
+### CalVer
+
+Format: **`YYYY.MM.DD.N`** – e.g. `2026.06.01.3`
+
+- `YYYY.MM.DD` – current date in UTC
+- `N` – monotonically increasing counter per day, 1-based
+
+N is calculated **exclusively from local Git tags** – no SCM API call, fully provider-agnostic.
+relctl lists all tags matching `YYYY.MM.DD.*` for today and sets N to `max(N) + 1` (or `1` if no tag exists yet).
+
+> **Prerequisite**: the repository must be checked out with full tag history (`fetch-depth: 0`).
+> This is already a general relctl requirement.
+
+## Configuration
+
+### `.relctl.yaml` (repo-level config file)
+
+Place a `.relctl.yaml` in your repository root to set project-wide defaults:
+
+```yaml
+version_scheme: calver   # semver (default) | calver
+default_branch: main
+```
+
+The file is optional. When absent, relctl behaves exactly as before (SemVer, `main`).
+
+**Priority**: `--version-scheme` flag > `.relctl.yaml` > built-in default (SemVer)
+
+### CLI Flags
+
+| Flag | Scope | Description |
+|---|---|---|
+| `--config <path>` | `relctl`, `release` | Override config file path (default: `.relctl.yaml`) |
+| `--version-scheme <scheme>` | `release` | `semver` or `calver`; overrides config file |
 
 ## Usage
 
-To integrate relctl into your pipeline, follow these steps:
+### SemVer release (existing workflow, unchanged)
 
-1. Utilize the github action [layer87-labs/relctl-action](https://github.com/layer87-labs/relctl-action) to install relctl.
-2. Configure your pipeline to use relctl.
-3. Use the any command to interact with relctl.
+```bash
+# After merging a PR – relctl reads the PR branch and GitHub API
+relctl release create
+relctl release publish --release-id "$RELCTL_RELEASE_ID" --asset "file=dist/binary"
+```
 
-You can find more information on how to integrate relctl into your pipeline in the [manual](https://layer87-labs.github.io/relctl/).
+### CalVer release via config file
+
+```yaml
+# .relctl.yaml
+version_scheme: calver
+```
+
+```bash
+# No branch prefix or PR context required
+relctl release create
+# → e.g. 2026.06.01.1
+
+relctl release publish --release-id "$RELCTL_RELEASE_ID" --asset "file=dist/binary"
+```
+
+### CalVer release via flag (no config file needed)
+
+```bash
+relctl release create --version-scheme calver
+# → e.g. 2026.06.01.1
+
+# Second release on the same day (git tag 2026.06.01.1 already exists)
+relctl release create --version-scheme calver
+# → 2026.06.01.2
+```
+
+### Dry-run (preview version without creating a release)
+
+```bash
+relctl release create --version-scheme calver --dry-run
+# Would create new release with version: 2026.06.01.1
+```
+
+### GitHub Actions example
+
+```yaml
+- uses: actions/checkout@v4
+  with:
+    fetch-depth: 0   # required: full tag history for N calculation
+
+- name: Create CalVer release
+  run: relctl release create --version-scheme calver
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
 
 ## Examples
 
-You can find several examples of how to use relctl in the [examples section](https://layer87-labs.github.io/relctl/docs/examples) of the documentation.
+More examples are available in the [examples section](https://layer87-labs.github.io/relctl/docs/examples)
+of the documentation.
 
 ## Frequently Asked Questions
 
-You can find frequently asked questions in the [Questions and Answers](https://layer87-labs.github.io/relctl/docs/questions_and_answers) section of the documentation.
+See the [Q&A section](https://layer87-labs.github.io/relctl/docs/questions_and_answers).
 
 ## Getting Help
 
-If you have questions, concerns, or bug reports, please file an issue in this repository's Issue Tracker.
+Please file an issue in this repository's [Issue Tracker](https://github.com/layer87-labs/relctl/issues).
 
 ## Community
 
@@ -53,9 +150,11 @@ If you have questions, concerns, or bug reports, please file an issue in this re
 
 ## License
 
-relctl is licensed under the Apache License, Version 2.0. You can find the license file [here](LICENSE).
+relctl is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
 
 ## Credits
 
 - [SemVer](https://semver.org/)
+- [CalVer](https://calver.org/)
 - [Cobra CLI](https://github.com/spf13/cobra)
+- [go-git](https://github.com/go-git/go-git)
