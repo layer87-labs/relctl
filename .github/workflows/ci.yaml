@@ -166,6 +166,4 @@ jobs:
         uses: actions/dependency-review-action@v5
         with:
           # Only fail on high/critical CVEs.
-          # Moderate/low findings in generated code (e.g. .dagger/) are
-          # managed by the Dagger engine — not manually updatable.
           fail-on-severity: high

@@ -1,0 +1,1 @@
+Remove all dagger-related files and configurations from the relctl repo. Delete .dagger/ directory and dagger.json. Update .github/workflows/ci.yaml to remove the dagger comment. Check and update any docs. Finally, create a new PR with the commit message "feat: remove dagger feature".
