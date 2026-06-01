@@ -8,9 +8,11 @@ import (
 
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
+	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
 	"github.com/layer87-labs/relctl/internal/pkg/uploadasset"
+	"github.com/layer87-labs/relctl/internal/pkg/versioning"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -25,6 +27,11 @@ type ReleaseArgs struct {
 	DryRun         bool
 	Hotfix         bool
 	Body           string
+	// VersionScheme overrides the config-file value ("semver" or "calver").
+	// Empty string means "use config / default".
+	VersionScheme string
+	// ConfigFile is the path to .relctl.yaml; empty means default lookup.
+	ConfigFile string
 }
 
 func ReleaseCreate(args *ReleaseArgs) {
@@ -125,12 +132,48 @@ func ReleasePublish(args *ReleaseArgs, releaseID int64, assetsStr []string) {
 	}
 }
 
+// resolveVersionScheme determines the active scheme from flag → config → default.
+func resolveVersionScheme(args *ReleaseArgs) (string, error) {
+	if args.VersionScheme != "" {
+		return args.VersionScheme, nil
+	}
+	cfgPath := args.ConfigFile
+	if cfgPath == "" {
+		cfgPath = relctlconfig.DefaultConfigFile
+	}
+	cfg, err := relctlconfig.Load(cfgPath)
+	if err != nil {
+		return "", fmt.Errorf("loading relctl config: %w", err)
+	}
+	return cfg.VersionScheme, nil
+}
+
 func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, releasePrefix string, err error) {
 	if args.ReleasePrefix != "" {
 		releasePrefix = args.ReleasePrefix
 	} else {
 		releasePrefix = "Release"
 	}
+
+	// --- CalVer path (provider-agnostic, no SCM API required) ---
+	scheme, schemeErr := resolveVersionScheme(args)
+	if schemeErr != nil {
+		return "", "", schemeErr
+	}
+	if scheme == relctlconfig.SchemeCalVer {
+		if args.Version != "" {
+			// Explicit --version overrides CalVer calculation.
+			return args.Version, releasePrefix, nil
+		}
+		repoPath, pathErr := tools.RepoRoot()
+		if pathErr != nil {
+			return "", "", fmt.Errorf("calver: could not determine repo root: %w", pathErr)
+		}
+		cv := versioning.NewCalVerScheme()
+		version, err = cv.NextVersion(versioning.ReleaseContext{RepoPath: repoPath})
+		return version, releasePrefix, err
+	}
+	// --- end CalVer path ---
 
 	if args.Version != "" && args.PatchLevel != "" {
 		parsedPatchLevel, err := semver.ParsePatchLevel(args.PatchLevel)
@@ -200,12 +243,16 @@ func getPrFromMergeMessage() (pr int, err error) {
 	regex := `.*#([0-9]+).*`
 	r := regexp.MustCompile(regex)
 
-	mergeMessage := r.FindStringSubmatch(tools.RunCmd(`git log -1 --pretty=format:"%s"`, true))
+	subject, err := tools.GitLogSubject()
+	if err != nil {
+		return 0, fmt.Errorf("reading git log: %w", err)
+	}
+
+	mergeMessage := r.FindStringSubmatch(subject)
 	if len(mergeMessage) > 1 {
 		return strconv.Atoi(mergeMessage[1])
-	} else {
-		return 0, errors.New("No PR found in merge message pls make shure this regex matches: " + regex +
-			"\nExample: Merge pull request #3 from some-orga/feature/awesome-feature" +
-			"\nAlternativly provide the PR-Number by adding the argument -number <int>")
 	}
+	return 0, errors.New("No PR found in merge message pls make shure this regex matches: " + regex +
+		"\nExample: Merge pull request #3 from some-orga/feature/awesome-feature" +
+		"\nAlternativly provide the PR-Number by adding the argument -number <int>")
 }

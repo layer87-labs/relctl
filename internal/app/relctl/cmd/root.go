@@ -17,6 +17,9 @@ import (
 
 var Verbose bool
 
+// ConfigFile holds the path to the .relctl.yaml config, overridable via --config.
+var ConfigFile string
+
 var RootCmd = &cobra.Command{
 	Use:     "relctl",
 	Version: fmt.Sprintf("%s (%s)-(%s)", build.Version, build.CommitHash, build.BuildDate),
@@ -39,6 +42,7 @@ func init() {
 
 	// flags
 	RootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "verbose output")
+	RootCmd.PersistentFlags().StringVar(&ConfigFile, "config", "", "path to .relctl.yaml config file (default: .relctl.yaml in working directory)")
 
 	// PreRuns
 	RootCmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {

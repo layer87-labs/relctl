@@ -12,30 +12,41 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
+// RepoRoot returns the absolute path to the root of the current Git repository.
+func RepoRoot() (string, error) {
+	repo, err := git.PlainOpenWithOptions(".", &git.PlainOpenOptions{DetectDotGit: true})
+	if err != nil {
+		return "", fmt.Errorf("could not find git repository: %w", err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		return "", fmt.Errorf("could not get worktree: %w", err)
+	}
+	return wt.Filesystem.Root(), nil
+}
+
 func GetDefaultBranch() string {
-	branch := RunCmd(`git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@'`, true)
-	return strings.TrimSuffix(branch, "\n")
+	out, err := exec.Command("git", "symbolic-ref", "refs/remotes/origin/HEAD").Output()
+	if err != nil {
+		return ""
+	}
+	ref := strings.TrimSpace(string(out))
+	return strings.TrimPrefix(ref, "refs/remotes/origin/")
+}
+
+// GitLogSubject returns the subject line of the most recent commit.
+func GitLogSubject() (string, error) {
+	out, err := exec.Command("git", "log", "-1", "--pretty=format:%s").Output()
+	if err != nil {
+		return "", fmt.Errorf("git log: %w", err)
+	}
+	return string(out), nil
 }
 
 func DevideOwnerAndRepo(fullRepo string) (owner string, repo string) {
 	owner = strings.ToLower(strings.Split(fullRepo, "/")[0])
 	repo = strings.ToLower(strings.Split(fullRepo, "/")[1])
 	return
-}
-
-func RunCmd(cmd string, shell bool) string {
-	if shell {
-		out, err := exec.Command("bash", "-c", cmd).Output()
-		if err != nil {
-			fmt.Println(err)
-		}
-		return string(out)
-	}
-	out, err := exec.Command(cmd).Output()
-	if err != nil {
-		fmt.Println(err)
-	}
-	return string(out)
 }
 
 func GetGitTagsUpToHead(gitRepo *git.Repository) (tags []*semver.Version, err error) {
