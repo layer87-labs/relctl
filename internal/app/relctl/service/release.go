@@ -55,6 +55,15 @@ func ReleaseCreate(args *ReleaseArgs) {
 
 		fmt.Println("### Info output:")
 		fmt.Printf("Would create new release with version: %s\n", version)
+
+		var envVars = []ces.KeyValue{
+			{Name: "RELCTL_VERSION", Value: version},
+			{Name: "RELCTL_NEXT_VERSION", Value: version},
+		}
+
+		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
+			log.Fatalf("could not export env variables: %v", err)
+		}
 	} else {
 		log.Infof("Writing new release: %s\n", version)
 		fmt.Println("### Info output:")
@@ -68,6 +77,8 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Printf("Create release successful. ID: %d", createdRelease.ID)
 
 		var envVars = []ces.KeyValue{
+			{Name: "RELCTL_VERSION", Value: version},
+			{Name: "RELCTL_NEXT_VERSION", Value: version},
 			{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", createdRelease.ID)},
 		}
 
