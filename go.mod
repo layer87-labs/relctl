@@ -1,11 +1,11 @@
 module github.com/layer87-labs/relctl
 
-go 1.26.3
+go 1.26.4
 
 require (
 	github.com/coreos/go-semver v0.3.1
 	github.com/ghodss/yaml v1.0.0
-	github.com/go-git/go-git/v5 v5.19.0
+	github.com/go-git/go-git/v5 v5.19.1
 	github.com/google/go-github/v86 v86.0.0
 	github.com/itchyny/gojq v0.12.19
 	github.com/spf13/cobra v1.10.2
@@ -46,8 +46,8 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/skeema/knownhosts v1.3.2 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
-	golang.org/x/net v0.54.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/crypto v0.53.0 // indirect
+	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 )
