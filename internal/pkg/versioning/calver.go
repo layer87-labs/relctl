@@ -10,9 +10,17 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 )
 
-// CalVerScheme implements VersionScheme using the YYYY.MM.DD.N format.
-// N is monotonically increasing per day, 1-based, derived exclusively from
-// local Git tags – no network calls, no SCM API.
+// CalVerScheme implements VersionScheme using the YYYYMM.DD.N format.
+// This format is strict semver-compatible (MAJOR.MINOR.PATCH) while still
+// encoding the date:
+//
+//	MAJOR = YYYYMM  (e.g. 202606)
+//	MINOR = DD      (e.g. 11, no leading zeros)
+//	PATCH = N       (monotonically increasing per day, 1-based)
+//
+// Example: 202606.11.3 (3rd release on 2026-06-11)
+//
+// N is derived exclusively from local Git tags – no network calls, no SCM API.
 type CalVerScheme struct {
 	// now is the time source used for date calculation.
 	// Defaults to time.Now().UTC(); overridable in tests.
@@ -32,7 +40,7 @@ func NewCalVerScheme() *CalVerScheme {
 }
 
 // NextVersion calculates the next CalVer string for today.
-// Format: YYYY.MM.DD.N  (e.g. 2026.06.01.3)
+// Format: YYYYMM.DD.N  (e.g. 202606.1.3)
 func (c *CalVerScheme) NextVersion(ctx ReleaseContext) (string, error) {
 	today := c.now()
 	prefix := calverDatePrefix(today)
@@ -46,26 +54,31 @@ func (c *CalVerScheme) NextVersion(ctx ReleaseContext) (string, error) {
 	return fmt.Sprintf("%s.%d", prefix, n), nil
 }
 
-// Validate reports whether version is a well-formed CalVer string (YYYY.MM.DD.N).
+// Validate reports whether version is a well-formed CalVer string (YYYYMM.DD.N).
 func (c *CalVerScheme) Validate(version string) bool {
 	parts := strings.Split(version, ".")
-	if len(parts) != 4 {
+	if len(parts) != 3 {
 		return false
 	}
-	// Validate YYYY, MM, DD as integers
-	for _, p := range parts[:3] {
-		if _, err := strconv.Atoi(p); err != nil {
-			return false
-		}
+	// MAJOR must be a 6-digit YYYYMM integer
+	yyyymm, err := strconv.Atoi(parts[0])
+	if err != nil || yyyymm < 100001 {
+		return false
+	}
+	// DD must be a positive integer (1–31)
+	dd, err := strconv.Atoi(parts[1])
+	if err != nil || dd < 1 || dd > 31 {
+		return false
 	}
 	// N must be a positive integer
-	n, err := strconv.Atoi(parts[3])
+	n, err := strconv.Atoi(parts[2])
 	return err == nil && n > 0
 }
 
-// calverDatePrefix formats the date part of a CalVer version: YYYY.MM.DD
+// calverDatePrefix formats the date part of a CalVer version: YYYYMM.DD
+// Month is zero-padded inside YYYYMM; DD has no leading zero (semver MINOR).
 func calverDatePrefix(t time.Time) string {
-	return fmt.Sprintf("%04d.%02d.%02d", t.Year(), int(t.Month()), t.Day())
+	return fmt.Sprintf("%04d%02d.%d", t.Year(), int(t.Month()), t.Day())
 }
 
 // nextN scans tags for the given date prefix and returns max(N)+1.
