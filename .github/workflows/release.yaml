@@ -51,7 +51,7 @@ jobs:
             ext: .exe
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -136,7 +136,7 @@ jobs:
     needs: [create-release, build, checksums]
     environment: production
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup relctl
         uses: layer87-labs/relctl-action@main
