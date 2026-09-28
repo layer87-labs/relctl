@@ -93,7 +93,7 @@ func ClassifyMessage(msg string) Bump {
 	commitType := strings.ToLower(m[1])
 	hasBang := m[3] == "!"
 
-	bump := BumpNone
+	var bump Bump
 	switch {
 	case commitType == "feat":
 		bump = BumpMinor
