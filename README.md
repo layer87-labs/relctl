@@ -59,12 +59,14 @@ uses the SCM API, the same way the existing `--hotfix` flag does.
 > **Prerequisite**: the repository must be checked out with full history (`fetch-depth: 0`),
 > same as CalVer.
 
-> **Squash merges only**: relctl reads one commit message per merge onto the target branch. With
-> a squash-merge workflow, that message is the PR title / squash commit message and carries the
-> type directly – this is the supported case. A `Merge pull request #123 …` merge-commit subject
-> itself does not match a Conventional Commits type and is ignored; the individual commits it
-> brings in are **not** inspected separately. Repositories that merge multi-commit PRs with a
-> merge commit (rather than squashing) are not supported by this scheme.
+> **Squash merges only**: relctl walks the **first-parent chain** from HEAD down to the last
+> published release. With a squash-merge workflow that chain *is* the sequence of PR
+> title / squash commit messages, one per merge, each carrying its type directly – this is the
+> supported case. If relctl finds a commit with more than one parent (a real merge commit) in
+> that range, it **fails with a clear error** (`ErrMergeCommitInRange`) instead of guessing –
+> a merge commit means the first-parent chain no longer represents "one commit per PR", and
+> silently walking past it could understate the bump. Repositories that bring in multi-commit
+> PRs via a merge commit (rather than squashing) are not supported by this scheme.
 
 `--version` as an explicit override always takes precedence, exactly like for SemVer and CalVer.
 

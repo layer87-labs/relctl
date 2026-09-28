@@ -73,9 +73,12 @@ var breakingFooterRe = regexp.MustCompile(`(?m)^BREAKING[ -]CHANGE:`)
 // ClassifyMessage returns the SemVer bump level a single commit message
 // implies. msg is the full commit message (header + optional body/footers).
 //
-// A merge commit subject such as "Merge pull request #123 from org/branch"
-// does not match a Conventional Commits header and is therefore classified
-// as BumpNone — relctl's conventional-commits scheme only understands
+// A message that happens to start with "Merge pull request #123 from
+// org/branch" does not match a Conventional Commits header and is therefore
+// classified as BumpNone. In practice CommitMessagesSince never hands this
+// function an actual merge commit's message: it refuses to walk past a
+// commit with more than one parent (ErrMergeCommitInRange) before it gets
+// here, because relctl's conventional-commits scheme only understands
 // squash-merged commits, where the PR title/commit subject itself carries
 // the type.
 func ClassifyMessage(msg string) Bump {

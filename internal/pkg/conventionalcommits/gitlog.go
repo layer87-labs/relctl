@@ -5,31 +5,44 @@ import (
 	"fmt"
 
 	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing/object"
-	"github.com/go-git/go-git/v5/plumbing/storer"
 
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
 )
 
 // ErrTagNotFound is returned by CommitMessagesSince when the given tag does
-// not exist in the local repository.
+// not exist in the local repository, or is not reachable via the
+// first-parent chain from HEAD.
 var ErrTagNotFound = errors.New("tag not found in local repository")
 
+// ErrMergeCommitInRange is returned by CommitMessagesSince when a commit
+// between HEAD and sinceTag has more than one parent. The
+// conventional-commits scheme only understands a squash-merge workflow,
+// where every commit on the target branch's first-parent chain is itself
+// the unit to classify; a real merge commit means that assumption no
+// longer holds, and guessing at the "right" set of commits to inspect
+// would risk a silently wrong (too low) version bump. Failing loudly here
+// is deliberate — see relctl#31 / relctl#32.
+var ErrMergeCommitInRange = errors.New("merge commit found between the last published release and HEAD; the conventional-commits scheme only supports a squash-merge workflow")
+
 // CommitMessagesSince returns the full commit messages (header + body) of
-// every commit reachable from HEAD, down to (but excluding) the commit
-// tagged sinceTag. The order is unspecified.
+// every commit on the first-parent chain from HEAD, down to (but excluding)
+// the commit tagged sinceTag, in walk order (HEAD first).
 //
 // It relies purely on local Git state (the repository must be checked out
 // with full history/tags, the same prerequisite relctl already documents
 // for the CalVer scheme) — no SCM API call.
 //
-// Only the first-parent chain is walked, which is exactly the commit
-// sequence a squash-merge workflow produces on the default branch. A merge
-// commit's own subject ("Merge pull request #123 …") is included as one of
-// the returned messages but classifies as BumpNone; the individual commits
-// squashed into it are not inspected separately. Repositories that use
-// merge commits (rather than squash merges) to bring in multi-commit PRs
-// are not supported by this scheme.
+// Only the first-parent chain is walked, by following object.Commit.Parent(0)
+// directly rather than go-git's repo.Log with LogOrderCommitterTime (which
+// visits ALL parents ordered by committer time, not just the first parent —
+// using it here would silently stop the walk at sinceTag on the main line
+// while never visiting commits that only exist on a side branch of a real
+// merge commit, understating the bump). This is exactly the commit sequence
+// a squash-merge workflow produces on the default branch, where each commit
+// on that chain is one squashed PR. If a commit with more than one parent is
+// encountered before reaching sinceTag, that assumption no longer holds and
+// CommitMessagesSince returns ErrMergeCommitInRange rather than silently
+// walking (or not walking) a side branch.
 func CommitMessagesSince(repoPath, sinceTag string) ([]string, error) {
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
@@ -50,25 +63,40 @@ func CommitMessagesSince(repoPath, sinceTag string) ([]string, error) {
 		return nil, fmt.Errorf("conventionalcommits: resolving HEAD: %w", err)
 	}
 
-	logIter, err := repo.Log(&git.LogOptions{
-		From:  head.Hash(),
-		Order: git.LogOrderCommitterTime,
-	})
+	commit, err := repo.CommitObject(head.Hash())
 	if err != nil {
-		return nil, fmt.Errorf("conventionalcommits: reading commit log: %w", err)
+		return nil, fmt.Errorf("conventionalcommits: resolving HEAD commit: %w", err)
 	}
 
 	var messages []string
-	err = logIter.ForEach(func(c *object.Commit) error {
-		if c.Hash.String() == sinceHash {
-			return storer.ErrStop
+	for {
+		if commit.Hash.String() == sinceHash {
+			return messages, nil
 		}
-		messages = append(messages, c.Message)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("conventionalcommits: walking commit log: %w", err)
-	}
+		if commit.NumParents() > 1 {
+			return nil, fmt.Errorf("conventionalcommits: %w: %s %q", ErrMergeCommitInRange, commit.Hash.String()[:12], firstLine(commit.Message))
+		}
+		messages = append(messages, commit.Message)
 
-	return messages, nil
+		if commit.NumParents() == 0 {
+			// Reached the root commit without finding sinceTag on the
+			// first-parent chain: sinceTag is not an ancestor of HEAD via
+			// first-parent (e.g. a stale or unrelated tag).
+			return nil, fmt.Errorf("conventionalcommits: %w: %q is not reachable from HEAD via the first-parent chain", ErrTagNotFound, sinceTag)
+		}
+
+		commit, err = commit.Parent(0)
+		if err != nil {
+			return nil, fmt.Errorf("conventionalcommits: walking first-parent chain: %w", err)
+		}
+	}
+}
+
+func firstLine(msg string) string {
+	for i, c := range msg {
+		if c == '\n' {
+			return msg[:i]
+		}
+	}
+	return msg
 }

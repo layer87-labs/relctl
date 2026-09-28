@@ -66,9 +66,9 @@ func TestConventionalCommitsVersion(t *testing.T) {
 			wantErr:    ErrNoRelevantCommits,
 		},
 		{
-			name:       "no previous release errors",
-			release:    nil,
-			wantErr:    ErrNoPreviousRelease,
+			name:    "no previous release errors",
+			release: nil,
+			wantErr: ErrNoPreviousRelease,
 		},
 		{
 			name:       "release lookup failure wraps ErrNoPreviousRelease",
