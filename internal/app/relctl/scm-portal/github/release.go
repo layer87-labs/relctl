@@ -160,6 +160,23 @@ func (ghrc *GitHubRichClient) PublishRelease(
 // - latestRelease: a pointer to the latest non-draft release.
 // - err: an error if any occurred during the process.
 func (ghrc *GitHubRichClient) GetLatestReleaseVersion() (latestRelease *github.RepositoryRelease, err error) {
+	return ghrc.getLatestRelease(false)
+}
+
+// GetLatestPublishedRelease retrieves the latest *published* release from
+// the GitHub repository: not a draft, and not marked as a prerelease.
+//
+// It exists alongside GetLatestReleaseVersion (which only excludes drafts)
+// because some callers — e.g. the conventional-commits version scheme —
+// need a strictly "this is what users are running" reference point, where
+// a prerelease would give a misleading base version to bump from.
+func (ghrc *GitHubRichClient) GetLatestPublishedRelease() (latestRelease *github.RepositoryRelease, err error) {
+	return ghrc.getLatestRelease(true)
+}
+
+// getLatestRelease retrieves the latest release, always excluding drafts and
+// additionally excluding prereleases when excludePrerelease is true.
+func (ghrc *GitHubRichClient) getLatestRelease(excludePrerelease bool) (latestRelease *github.RepositoryRelease, err error) {
 	var releaseMap = make(map[string]*github.RepositoryRelease)
 	var loadReleasesFromRepo func(page int)
 
@@ -175,11 +192,15 @@ func (ghrc *GitHubRichClient) GetLatestReleaseVersion() (latestRelease *github.R
 
 		logrus.Tracef("found %d releases at page %d begin with mapping...", len(releases), page)
 		for _, release := range releases {
-			if !*release.Draft {
-				releaseMap[*release.TagName] = release
-			} else {
+			if *release.Draft {
 				logrus.Infof("ignoring draft release %s", *release.Name)
+				continue
 			}
+			if excludePrerelease && release.Prerelease != nil && *release.Prerelease {
+				logrus.Infof("ignoring prerelease %s", *release.Name)
+				continue
+			}
+			releaseMap[*release.TagName] = release
 		}
 
 		logrus.Traceln("####### next page:", response.NextPage)

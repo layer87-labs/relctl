@@ -8,6 +8,7 @@ import (
 
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
+	"github.com/layer87-labs/relctl/internal/pkg/conventionalcommits"
 	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
@@ -185,6 +186,21 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 		return version, releasePrefix, err
 	}
 	// --- end CalVer path ---
+
+	// --- Conventional Commits path ---
+	if scheme == relctlconfig.SchemeConventionalCommits {
+		if args.Version != "" {
+			// Explicit --version overrides the conventional-commits calculation.
+			return args.Version, releasePrefix, nil
+		}
+		repoPath, pathErr := tools.RepoRoot()
+		if pathErr != nil {
+			return "", "", fmt.Errorf("conventional-commits: could not determine repo root: %w", pathErr)
+		}
+		version, err = conventionalCommitsVersion(scmLayer, conventionalcommits.CommitMessagesSince, repoPath)
+		return version, releasePrefix, err
+	}
+	// --- end Conventional Commits path ---
 
 	if args.Version != "" && args.PatchLevel != "" {
 		parsedPatchLevel, err := semver.ParsePatchLevel(args.PatchLevel)

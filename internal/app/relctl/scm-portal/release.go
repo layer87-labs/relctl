@@ -21,6 +21,24 @@ func (lay SCMLayer) GetLatestReleaseVersion() (release *Release, err error) {
 	}, nil
 }
 
+// GetLatestPublishedRelease returns the latest release that is neither a
+// draft nor a prerelease.
+func (lay SCMLayer) GetLatestPublishedRelease() (release *Release, err error) {
+
+	grc := lay.Grc.(*github.GitHubRichClient)
+	latestRelease, err := grc.GetLatestPublishedRelease()
+	if err != nil {
+		return nil, err
+	}
+	return &Release{
+		TagName:     *latestRelease.TagName,
+		Name:        *latestRelease.Name,
+		Commit:      *latestRelease.TargetCommitish,
+		CreatedAt:   &latestRelease.CreatedAt.Time,
+		PublishedAt: &latestRelease.PublishedAt.Time,
+	}, nil
+}
+
 func (lay SCMLayer) CreateRelease(tagName string, releasePrefix string, branch string, body string) (createdRelease *Release, err error) {
 
 	grc := lay.Grc.(*github.GitHubRichClient)

@@ -7,11 +7,12 @@ import (
 )
 
 const (
-	DefaultConfigFile    = ".relctl.yaml"
-	SchemeCalVer         = "calver"
-	SchemeSemVer         = "semver"
-	DefaultVersionScheme = SchemeSemVer
-	DefaultBranch        = "main"
+	DefaultConfigFile         = ".relctl.yaml"
+	SchemeCalVer              = "calver"
+	SchemeSemVer              = "semver"
+	SchemeConventionalCommits = "conventional-commits"
+	DefaultVersionScheme      = SchemeSemVer
+	DefaultBranch             = "main"
 )
 
 // Config holds the contents of a .relctl.yaml project config file.

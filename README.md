@@ -9,8 +9,9 @@
 # relctl
 
 **Description**: relctl is a provider-agnostic release management CLI for CI/CD pipelines.
-It supports two versioning schemes – [SemVer](https://semver.org/) and [CalVer](https://calver.org/) –
-and integrates with GitHub, GitHub Enterprise, GitLab, and Jenkins.
+It supports three versioning schemes – [SemVer](https://semver.org/) (branch-prefix driven),
+SemVer via [Conventional Commits](https://www.conventionalcommits.org/) (commit-message driven),
+and [CalVer](https://calver.org/) – and integrates with GitHub, GitHub Enterprise, GitLab, and Jenkins.
 
 - **Technology stack**: Go, Cobra CLI
 - **Status**: Stable
@@ -18,7 +19,7 @@ and integrates with GitHub, GitHub Enterprise, GitLab, and Jenkins.
   - GitHub & GitHub Enterprise (GitHub Actions)
   - GitLab (GitLab CI)
   - Jenkins Pipelines
-- **Versioning schemes**: SemVer (branch-prefix driven) · CalVer (date-based, git-tag driven)
+- **Versioning schemes**: SemVer (branch-prefix driven) · Conventional Commits (commit-message driven SemVer) · CalVer (date-based, git-tag driven)
 
 ## Getting Started
 
@@ -37,6 +38,37 @@ relctl derives the SemVer bump level from the source branch name:
 | `bugfix/`, `fix/`, `patch/`, `dependabot/` | Patch |
 | `feature/`, `feat/`, `minor/` | Minor |
 | `major/` | Major |
+
+### Conventional Commits
+
+relctl derives the SemVer bump level from the commit messages between the last **published**
+release (not draft, not prerelease) and the target commit, following the
+[Conventional Commits](https://www.conventionalcommits.org/) specification:
+
+| Rule | Bump |
+|---|---|
+| any commit with `!` after type/scope (`feat!:`, `fix(api)!:`), or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer in the body | Major |
+| otherwise, at least one `feat` commit | Minor |
+| otherwise, at least one commit of a recognised Conventional Commits type (`fix`, `perf`, `refactor`, `docs`, `style`, `test`, `chore`, `ci`, `build`, `revert`) | Patch |
+| no commit matches any of the above | No release – `relctl release create` fails with a clear error |
+
+The commit range and messages come **exclusively from the local Git history** – no SCM API call
+for the commits themselves, fully provider-agnostic. Finding the *last published release* still
+uses the SCM API, the same way the existing `--hotfix` flag does.
+
+> **Prerequisite**: the repository must be checked out with full history (`fetch-depth: 0`),
+> same as CalVer.
+
+> **Squash merges only**: relctl walks the **first-parent chain** from HEAD down to the last
+> published release. With a squash-merge workflow that chain *is* the sequence of PR
+> title / squash commit messages, one per merge, each carrying its type directly – this is the
+> supported case. If relctl finds a commit with more than one parent (a real merge commit) in
+> that range, it **fails with a clear error** (`ErrMergeCommitInRange`) instead of guessing –
+> a merge commit means the first-parent chain no longer represents "one commit per PR", and
+> silently walking past it could understate the bump. Repositories that bring in multi-commit
+> PRs via a merge commit (rather than squashing) are not supported by this scheme.
+
+`--version` as an explicit override always takes precedence, exactly like for SemVer and CalVer.
 
 ### CalVer
 
@@ -58,7 +90,7 @@ relctl lists all tags matching `YYYY.MM.DD.*` for today and sets N to `max(N) + 
 Place a `.relctl.yaml` in your repository root to set project-wide defaults:
 
 ```yaml
-version_scheme: calver   # semver (default) | calver
+version_scheme: calver   # semver (default) | calver | conventional-commits
 default_branch: main
 ```
 
@@ -71,7 +103,7 @@ The file is optional. When absent, relctl behaves exactly as before (SemVer, `ma
 | Flag | Scope | Description |
 |---|---|---|
 | `--config <path>` | `relctl`, `release` | Override config file path (default: `.relctl.yaml`) |
-| `--version-scheme <scheme>` | `release` | `semver` or `calver`; overrides config file |
+| `--version-scheme <scheme>` | `release` | `semver`, `calver` or `conventional-commits`; overrides config file |
 
 ## Usage
 
@@ -81,6 +113,13 @@ The file is optional. When absent, relctl behaves exactly as before (SemVer, `ma
 # After merging a PR – relctl reads the PR branch and GitHub API
 relctl release create
 relctl release publish --release-id "$RELCTL_RELEASE_ID" --asset "file=dist/binary"
+```
+
+### Conventional Commits release via flag (no config file needed)
+
+```bash
+relctl release create --version-scheme conventional-commits --dry-run
+# Would create new release with version: 1.3.0
 ```
 
 ### CalVer release via config file
