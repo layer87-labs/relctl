@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
@@ -25,7 +26,7 @@ import (
 // Returns:
 // - createdRelease: the created repository release.
 // - err: an error if there was a problem creating the release.
-func (ghrc *GitHubRichClient) CreateRelease(tagName string, releasePrefix string, releaseBranch string, body string) (createdRelease *github.RepositoryRelease, err error) {
+func (ghrc *GitHubRichClient) CreateRelease(tagName string, releasePrefix string, releaseBranch string, body string, prerelease bool) (createdRelease *github.RepositoryRelease, err error) {
 	draft := true
 	relName := fmt.Sprintf("%s %s", releasePrefix, tagName)
 	if releaseBranch == "" {
@@ -37,6 +38,7 @@ func (ghrc *GitHubRichClient) CreateRelease(tagName string, releasePrefix string
 		TagName:         &tagName,
 		Name:            &relName,
 		Draft:           &draft,
+		Prerelease:      &prerelease,
 		Body:            &body,
 	}
 	createdRelease, _, err = ghrc.Client.Repositories.CreateRelease(
@@ -74,7 +76,7 @@ func (ghrc *GitHubRichClient) PublishRelease(
 
 	if releaseID == 0 {
 		logrus.Infoln("no release found, creating one...")
-		release, err := ghrc.CreateRelease(tagName, releasePrefix, releaseBranch, body)
+		release, err := ghrc.CreateRelease(tagName, releasePrefix, releaseBranch, body, false)
 		if err != nil {
 			logrus.Fatalln(err)
 		}
@@ -279,4 +281,39 @@ func (ghrc *GitHubRichClient) FindReleaseByTag(tag string) (*github.RepositoryRe
 		page = resp.NextPage
 	}
 	return nil, nil
+}
+
+// ListTagAndReleaseNames returns the names of all tags and of all releases
+// (drafts included) that start with prefix. Release candidates exist as a tag
+// once published and only as a release while they are still drafts, so both
+// are needed to avoid reusing a number.
+func (ghrc *GitHubRichClient) ListTagAndReleaseNames(prefix string) ([]string, error) {
+	names := map[string]bool{}
+
+	refs, _, err := ghrc.Client.Git.ListMatchingRefs(ctx, ghrc.Owner, ghrc.Repository, "tags/"+prefix)
+	if err != nil {
+		return nil, fmt.Errorf("error at listing tags: %v", err)
+	}
+	for _, r := range refs {
+		names[strings.TrimPrefix(r.GetRef(), "refs/tags/")] = true
+	}
+
+	for page := 1; page != 0; {
+		releases, resp, err := ghrc.Client.Repositories.ListReleases(ctx, ghrc.Owner, ghrc.Repository, &github.ListOptions{PerPage: 100, Page: page})
+		if err != nil {
+			return nil, fmt.Errorf("error at listing releases: %v", err)
+		}
+		for _, r := range releases {
+			if strings.HasPrefix(r.GetTagName(), prefix) {
+				names[r.GetTagName()] = true
+			}
+		}
+		page = resp.NextPage
+	}
+
+	out := make([]string, 0, len(names))
+	for n := range names {
+		out = append(out, n)
+	}
+	return out, nil
 }

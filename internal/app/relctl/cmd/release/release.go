@@ -112,6 +112,7 @@ func init() {
 	Cmd.PersistentFlags().StringVarP(&releaseArgs.Body, "body", "b", "", "custom release message (markdown string or file)")
 	Cmd.PersistentFlags().StringVarP(&releaseArgs.PatchLevel, "patch-level", "l", "", "predefine patch level of version to Update")
 	Cmd.PersistentFlags().StringVar(&releaseArgs.VersionScheme, "version-scheme", "", "versioning scheme to use: semver (default), calver, conventional-commits or changelog (overrides .relctl.yaml)")
+	Cmd.PersistentFlags().BoolVar(&releaseArgs.Prerelease, "prerelease", false, "create a release candidate (X.Y.Z-rc.N, marked as prerelease) for the computed version")
 	Cmd.PersistentFlags().StringVar(&releaseArgs.ConfigFile, "config", "", "path to .relctl.yaml config file")
 
 	// exclusive Flags

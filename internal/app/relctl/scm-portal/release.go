@@ -39,10 +39,10 @@ func (lay SCMLayer) GetLatestPublishedRelease() (release *Release, err error) {
 	}, nil
 }
 
-func (lay SCMLayer) CreateRelease(tagName string, releasePrefix string, branch string, body string) (createdRelease *Release, err error) {
+func (lay SCMLayer) CreateRelease(tagName string, releasePrefix string, branch string, body string, prerelease bool) (createdRelease *Release, err error) {
 
 	grc := lay.Grc.(*github.GitHubRichClient)
-	createdRel, err := grc.CreateRelease(tagName, releasePrefix, branch, body)
+	createdRel, err := grc.CreateRelease(tagName, releasePrefix, branch, body, prerelease)
 	if err != nil {
 		return nil, err
 	}
@@ -83,4 +83,10 @@ func (lay SCMLayer) FindReleaseByTag(tag string) (*Release, bool, error) {
 		rel.PublishedAt = &r.PublishedAt.Time
 	}
 	return rel, r.GetDraft(), nil
+}
+
+// ListTagAndReleaseNames returns the names of all tags and releases (drafts
+// included) that start with prefix.
+func (lay SCMLayer) ListTagAndReleaseNames(prefix string) ([]string, error) {
+	return lay.Grc.(*github.GitHubRichClient).ListTagAndReleaseNames(prefix)
 }
