@@ -76,9 +76,20 @@ help, and document it in `docs/relctl/version-schemes.md`.
 
 ## Releases and versioning
 
-- Pull requests are squash-merged to `main`; every merge to `main` creates a release.
-- The SemVer bump comes from the PR branch prefix: `fix/`, `bugfix/`, `patch/`, `dependabot/` → patch;
-  `feat/`, `feature/`, `minor/` → minor; `major/` or any prefix ending in `!` (e.g. `feat!/`) → major.
+relctl releases itself with its own reviewed-release flow (flow 3, `.relctl.yaml`: `version_scheme: changelog`):
+
+- Work lands on `dev`; `main` only receives release pull requests. Pull requests into `dev` are
+  squash-merged. Branch names (`feat/…`, `fix/…`) are for readability and carry no version meaning.
+- The version is the topmost `## X.Y.Z` heading of `CHANGELOG.md`, in the strict format
+  `## X.Y.Z — YYYY-MM-DD` once released. A pull request with a user-visible change adds a bullet under the
+  topmost heading; if that heading is already dated (released), it first adds a new heading with the next
+  version, without a date.
+- Every push to `dev` runs the tests and publishes a release candidate `X.Y.Z-rc.N` (prerelease).
+- To release: a pull request `dev` → `main` dates the topmost heading. The `Release gate` check must pass
+  (dated heading with notes, version not released yet, a candidate for exactly this commit).
+  **Merge it with a merge commit, never a squash.** The push to `main` publishes `X.Y.Z`.
+- After the release, `relctl release forward` brings `main` back into `dev` (fast-forward, or a pull
+  request that is merged with a merge commit as well).
 - PR titles and commits follow Conventional Commits (`feat:`, `fix:`, `feat!:` …).
 - Behaviour changes need a matching update in the `docs` repository and, if workflow inputs or
   permissions change, in `relctl-action`.
@@ -86,5 +97,5 @@ help, and document it in `docs/relctl/version-schemes.md`.
 ## Workflow
 
 - Develop on a descriptively named branch (`feat/…`, `fix/…`, `docs/…`, `chore/…`), never push to
-  `main` directly. Do not use tool-generated branch names.
+  `main` or `dev` directly. Do not use tool-generated branch names. Branch from and target `dev`.
 - Open pull requests only when asked.

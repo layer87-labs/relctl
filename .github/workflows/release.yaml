@@ -1,16 +1,19 @@
 name: Release
 
+# Reviewed releases (flow 3): work lands on dev, the version is the topmost heading of
+# CHANGELOG.md. Every push to dev publishes a release candidate (X.Y.Z-rc.N); merging the
+# release pull request (dev -> main) publishes X.Y.Z. See .relctl.yaml.
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
     paths-ignore:
       - "docs/**"
-      - "*.md"
 
 permissions:
   contents: write
   id-token: write
   packages: write
+  pull-requests: write
 
 # Release runs must not overlap: two runs computing the next version at the same
 # time would create duplicate releases for the same version. A run that is still
@@ -21,13 +24,52 @@ concurrency:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
-  # Create Release – reusable workflow from relctl-action
+  # Test – a candidate must mean "this commit passed"
+  # ──────────────────────────────────────────────────────────────────────────────
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - run: make test
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Create Release – a candidate on dev, the release on main.
+  # Outputs stay empty when there is nothing to publish (version already released).
   # ──────────────────────────────────────────────────────────────────────────────
   create-release:
     name: Create Release
-    uses: layer87-labs/relctl-action/.github/workflows/create-release.yml@main
-    secrets:
-      token: ${{ secrets.GITHUB_TOKEN }}
+    runs-on: ubuntu-latest
+    needs: [test]
+    outputs:
+      version: ${{ steps.release.outputs.RELCTL_VERSION }}
+      release-id: ${{ steps.release.outputs.RELCTL_RELEASE_ID }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup relctl
+        uses: layer87-labs/relctl-action@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        id: release
+        run: |
+          if [ "${GITHUB_REF_NAME}" = "dev" ]; then
+            relctl release create --prerelease --merge-sha "${GITHUB_SHA}"
+          else
+            relctl release create --merge-sha "${GITHUB_SHA}"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # ──────────────────────────────────────────────────────────────────────────────
   # Phase A – Build, sign, SBOM
@@ -36,6 +78,7 @@ jobs:
     name: Build & Sign (${{ matrix.goos }}/${{ matrix.goarch }})
     runs-on: ubuntu-latest
     needs: [create-release]
+    if: needs.create-release.outputs.release-id != ''
     strategy:
       fail-fast: false
       matrix:
@@ -141,7 +184,7 @@ jobs:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
     needs: [create-release, build, checksums]
-    environment: production
+    environment: ${{ github.ref_name == 'main' && 'production' || 'candidate' }}
     steps:
       - uses: actions/checkout@v6
 
@@ -169,6 +212,29 @@ jobs:
           relctl release publish \
             --release-id "${{ needs.create-release.outputs.release-id }}" \
             "${ASSETS[@]}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ──────────────────────────────────────────────────────────────────────────────
+  # Forward – bring main (merge commit, dated changelog heading) back into dev
+  # ──────────────────────────────────────────────────────────────────────────────
+  forward:
+    name: Forward main into dev
+    runs-on: ubuntu-latest
+    needs: [create-release, publish-release]
+    if: always() && github.ref_name == 'main' && needs.create-release.result == 'success'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup relctl
+        uses: layer87-labs/relctl-action@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Forward
+        run: relctl release forward
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

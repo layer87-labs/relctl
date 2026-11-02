@@ -1,0 +1,5 @@
+# Reviewed releases: the version is the topmost heading of CHANGELOG.md.
+version_scheme: changelog
+changelog_file: CHANGELOG.md
+production_branch: main
+development_branch: dev

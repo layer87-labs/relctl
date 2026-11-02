@@ -1,0 +1,33 @@
+name: Release gate
+
+# Required check for the release pull request (dev -> main): the topmost CHANGELOG.md
+# heading is dated and has notes, its version is not released yet, and a release
+# candidate exists for exactly this commit. Other pull requests into main (for example
+# changes to the pipeline itself) skip the check; a skipped job counts as passed.
+on:
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: Release gate
+    if: github.head_ref == 'dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup relctl
+        uses: layer87-labs/relctl-action@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release gate
+        run: relctl release gate --sha "${{ github.event.pull_request.head.sha }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
