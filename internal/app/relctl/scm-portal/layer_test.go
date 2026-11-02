@@ -12,6 +12,7 @@ func TestUnsupportedSCMError(t *testing.T) {
 	require.ErrorContains(t, err, "GitLab is not supported")
 	require.ErrorContains(t, err, "open an issue")
 	require.ErrorContains(t, err, IssuesURL)
+	require.ErrorContains(t, err, "relctl connect github", "hint for GitLab CI with a GitHub repository")
 
 	err = unsupportedSCMError("")
 	require.ErrorContains(t, err, "no CI environment")
