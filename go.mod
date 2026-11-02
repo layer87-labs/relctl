@@ -1,6 +1,6 @@
 module github.com/layer87-labs/relctl
 
-go 1.26.6
+go 1.26.10
 
 require (
 	github.com/coreos/go-semver v0.3.1
