@@ -137,7 +137,7 @@ development_branch: dev      # default: the default branch of the repository
 | `relctl pr info` | version a pull request would produce |
 | `relctl parse json\|yaml\|version` | read values from JSON, YAML or version strings |
 | `relctl transform group-by` | group a JSON list by a key |
-| `relctl connect github` | store a connection for pipelines that cannot be detected (GitLab CI, local shell). The token is only obscured, not protected: keep `.awesomerc.yaml` out of Git and treat it like a token |
+| `relctl connect github` | store server and repository in `.relctl-connection.yaml` for pipelines that cannot be detected (GitLab CI with a GitHub repository, local shell). The file holds no secret; the token is read from `GITHUB_TOKEN` on every call and never stored |
 
 Variables are exported to the pipeline (GitHub Actions: `$GITHUB_ENV` and step outputs):
 `RELCTL_VERSION`, `RELCTL_NEXT_VERSION`, `RELCTL_RELEASE_ID`, `RELCTL_LATEST_VERSION`, `RELCTL_PR`, …

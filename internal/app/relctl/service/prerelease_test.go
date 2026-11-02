@@ -35,3 +35,19 @@ func TestReleaseTarget(t *testing.T) {
 	require.Equal(t, "main", releaseTarget(&ReleaseArgs{ReleaseBranch: "main"}))
 	require.Equal(t, "", releaseTarget(&ReleaseArgs{}), "empty means the default branch")
 }
+
+func TestReleaseBody(t *testing.T) {
+	failing := func() (string, error) { return "", errors.New("api down") }
+	generated := func() (string, error) { return "## What's Changed\n* a", nil }
+	neverCalled := func() (string, error) { t.Fatal("must not generate when a text is given"); return "", nil }
+
+	if got := releaseBody("my notes", neverCalled); got != "my notes" {
+		t.Errorf("given text must win, got %q", got)
+	}
+	if got := releaseBody("  \n", generated); got != "## What's Changed\n* a" {
+		t.Errorf("blank text must be replaced, got %q", got)
+	}
+	if got := releaseBody("", failing); got != "" {
+		t.Errorf("a failure must not stop the release, got %q", got)
+	}
+}

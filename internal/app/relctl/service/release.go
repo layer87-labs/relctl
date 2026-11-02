@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
@@ -84,6 +85,12 @@ func ReleaseCreate(args *ReleaseArgs) {
 				return
 			}
 		}
+	}
+
+	if !args.DryRun {
+		body = releaseBody(body, func() (string, error) {
+			return scmLayer.GenerateReleaseNotes(version, releaseTarget(args))
+		})
 	}
 
 	if args.DryRun {
@@ -173,6 +180,13 @@ func ReleasePublish(args *ReleaseArgs, releaseID int64, assetsStr []string) {
 		if notes, notesErr := changelogNotes(args, version); notesErr == nil {
 			body = notes
 		}
+	}
+
+	if releaseID == 0 && version != "" && !args.DryRun {
+		// no draft exists: the release is created now and needs its own text
+		body = releaseBody(body, func() (string, error) {
+			return scmLayer.GenerateReleaseNotes(version, releaseTarget(args))
+		})
 	}
 
 	if args.DryRun {
@@ -436,4 +450,21 @@ func releaseTarget(args *ReleaseArgs) string {
 		return args.MergeCommitSHA
 	}
 	return args.ReleaseBranch
+}
+
+// releaseBody returns the given text, or, if there is none, the generated notes.
+// A failure to generate notes is reported but does not stop the release.
+func releaseBody(body string, generate func() (string, error)) string {
+	if strings.TrimSpace(body) != "" {
+		return body
+	}
+	notes, err := generate()
+	if err != nil {
+		log.Warnf("no release notes: %v", err)
+		return body
+	}
+	if notes == "" {
+		log.Warn("GitHub generated empty release notes (no merged pull requests since the last release?)")
+	}
+	return notes
 }

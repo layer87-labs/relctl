@@ -30,9 +30,10 @@ tests/github_env
 test.txt
 
 docs/_site
-# awesome specialties
+# local relctl files
 .awesomerc.yaml
-awesome.env
+relctl.env
+awesomeci.env
 
 # PI Coding Agent
 .crew/

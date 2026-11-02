@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
 	"github.com/layer87-labs/relctl/internal/pkg/uploadasset"
@@ -93,42 +92,43 @@ func (ghrc *GitHubRichClient) PublishRelease(
 	}
 
 	// upload any given artifacts
-	var releaseBodyAssets = ""
-	if len(uploadArtifacts) > 0 {
-		releaseBodyAssets = "### Assets\n"
-
-		for _, asset := range uploadArtifacts {
-			logrus.Infof("uploading %s as asset to release\n", asset.Name)
-			file, err := os.Open(asset.FilePath)
-			if err != nil {
-				return releaseAssets, err
-			}
-			// Upload assets to GitHub Release
-			relAsset, _, err := ghrc.Client.Repositories.UploadReleaseAsset(
-				ctx,
-				ghrc.Owner,
-				ghrc.Repository,
-				releaseID,
-				&github.UploadOptions{
-					Name: asset.Name,
-				},
-				file)
-			if err != nil {
-				logrus.Warnln("error at uploading asset to release: ", err)
-			} else {
-				// add asset to release body
-				releaseBodyAssets = fmt.Sprintf("%s\n- [%s](%s) `%s`\n  Sha256: `%x`", releaseBodyAssets, asset.Name, *relAsset.BrowserDownloadURL, asset.ModTime.Format(time.RFC3339), asset.Hash)
-				releaseAssets = append(releaseAssets, relAsset)
-			}
+	var uploaded []assetRow
+	for _, asset := range uploadArtifacts {
+		logrus.Infof("uploading %s as asset to release\n", asset.Name)
+		file, err := os.Open(asset.FilePath)
+		if err != nil {
+			return releaseAssets, err
 		}
+		// Upload assets to GitHub Release
+		relAsset, _, err := ghrc.Client.Repositories.UploadReleaseAsset(
+			ctx,
+			ghrc.Owner,
+			ghrc.Repository,
+			releaseID,
+			&github.UploadOptions{
+				Name: asset.Name,
+			},
+			file)
+		_ = file.Close()
+		if err != nil {
+			logrus.Warnln("error at uploading asset to release: ", err)
+			continue
+		}
+		uploaded = append(uploaded, assetRow{
+			Name: asset.Name,
+			URL:  relAsset.GetBrowserDownloadURL(),
+			Size: int64(relAsset.GetSize()),
+			Hash: asset.Hash,
+		})
+		releaseAssets = append(releaseAssets, relAsset)
 	}
 
-	var newReleaseBody = ""
-	if *existingRelease.Body == "" {
-		newReleaseBody = fmt.Sprintf("%s\n\n%s", body, releaseBodyAssets)
-	} else {
-		newReleaseBody = fmt.Sprintf("%s\n\n%s", *existingRelease.Body, releaseBodyAssets)
+	// the text of an existing draft wins over the given body
+	base := existingRelease.GetBody()
+	if base == "" {
+		base = body
 	}
+	newReleaseBody := composeReleaseBody(base, uploaded)
 	existingRelease.Body = &newReleaseBody
 
 	// publishing release
@@ -337,4 +337,70 @@ func (ghrc *GitHubRichClient) TagCommit(tag string) (string, bool, error) {
 		return t.GetObject().GetSHA(), true, nil
 	}
 	return obj.GetSHA(), true, nil
+}
+
+// GenerateReleaseNotes asks GitHub for the notes of a release that does not exist yet.
+// GitHub lists the merged pull requests since previousTag and applies the categories of
+// .github/release.yml, if the repository has one. An empty previousTag lets GitHub choose.
+func (ghrc *GitHubRichClient) GenerateReleaseNotes(tag, target, previousTag string) (string, error) {
+	opts := &github.GenerateNotesOptions{TagName: tag}
+	if target != "" {
+		opts.TargetCommitish = &target
+	}
+	if previousTag != "" {
+		opts.PreviousTagName = &previousTag
+	}
+	notes, _, err := ghrc.Client.Repositories.GenerateReleaseNotes(ctx, ghrc.Owner, ghrc.Repository, opts)
+	if err != nil {
+		return "", fmt.Errorf("error at generating release notes: %v", err)
+	}
+	return strings.TrimSpace(notes.Body), nil
+}
+
+// assetRow is one uploaded file of a release.
+type assetRow struct {
+	Name string
+	URL  string
+	Size int64
+	Hash []byte
+}
+
+// composeReleaseBody joins the release text and the table of uploaded assets.
+func composeReleaseBody(text string, assets []assetRow) string {
+	text = strings.TrimSpace(text)
+	table := renderAssetsTable(assets)
+	switch {
+	case table == "":
+		return text
+	case text == "":
+		return table
+	default:
+		return text + "\n\n" + table
+	}
+}
+
+// renderAssetsTable renders the uploaded files as a markdown table.
+func renderAssetsTable(assets []assetRow) string {
+	if len(assets) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("### Assets\n\n| File | Size | SHA-256 |\n| --- | ---: | --- |\n")
+	for _, a := range assets {
+		fmt.Fprintf(&b, "| [%s](%s) | %s | `%x` |\n", a.Name, a.URL, humanSize(a.Size), a.Hash)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func humanSize(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGT"[exp])
 }
