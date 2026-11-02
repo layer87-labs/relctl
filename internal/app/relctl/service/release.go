@@ -105,7 +105,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Println("### Info output:")
 		fmt.Printf("Writing new release with version: %s\n", version)
 
-		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, args.ReleaseBranch, body, args.Prerelease)
+		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, releaseTarget(args), body, args.Prerelease)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -424,4 +424,16 @@ func versionAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool {
 		log.Fatalln(err)
 	}
 	return tagExists
+}
+
+// releaseTarget returns what the release's tag will point to. GitHub creates the
+// tag when the release is published, at the target given when the release was
+// created. A branch name would resolve to the head of the branch at publish time,
+// which may be a newer commit than the one the version was computed from, so the
+// merge commit wins when it is known.
+func releaseTarget(args *ReleaseArgs) string {
+	if args.MergeCommitSHA != "" {
+		return args.MergeCommitSHA
+	}
+	return args.ReleaseBranch
 }
