@@ -113,3 +113,33 @@ func (lay SCMLayer) CandidateCommits(version string) (map[string]string, error) 
 	}
 	return out, nil
 }
+
+// RepositoryDefaultBranch returns the default branch of the repository.
+func (lay SCMLayer) RepositoryDefaultBranch() (string, error) {
+	return lay.Grc.(*github.GitHubRichClient).RepositoryDefaultBranch()
+}
+
+// BranchSHA returns the commit a branch points to.
+func (lay SCMLayer) BranchSHA(branch string) (string, error) {
+	return lay.Grc.(*github.GitHubRichClient).BranchSHA(branch)
+}
+
+// CompareStatus compares head with base ("identical", "ahead", "behind", "diverged").
+func (lay SCMLayer) CompareStatus(base, head string) (string, error) {
+	return lay.Grc.(*github.GitHubRichClient).CompareStatus(base, head)
+}
+
+// FastForwardBranch moves a branch to sha without force.
+func (lay SCMLayer) FastForwardBranch(branch, sha string) error {
+	return lay.Grc.(*github.GitHubRichClient).FastForwardBranch(branch, sha)
+}
+
+// FindOpenPullRequest returns the number of an open pull request from head into base, or 0.
+func (lay SCMLayer) FindOpenPullRequest(head, base string) (int, error) {
+	return lay.Grc.(*github.GitHubRichClient).FindOpenPullRequest(head, base)
+}
+
+// CreatePullRequest opens a pull request from head into base.
+func (lay SCMLayer) CreatePullRequest(head, base, title, body string) (int, error) {
+	return lay.Grc.(*github.GitHubRichClient).CreatePullRequest(head, base, title, body)
+}

@@ -61,3 +61,31 @@ func TestChangelogFileDefault(t *testing.T) {
 	require.Equal(t, relctlconfig.SchemeChangelog, cfg.VersionScheme)
 	require.Equal(t, "docs/CHANGES.md", cfg.ChangelogFile)
 }
+
+func TestBranchSettings(t *testing.T) {
+	write := func(content string) string {
+		p := filepath.Join(t.TempDir(), ".relctl.yaml")
+		require.NoError(t, os.WriteFile(p, []byte(content), 0o600))
+		return p
+	}
+
+	cfg, err := relctlconfig.Load(filepath.Join(t.TempDir(), "missing.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, "main", cfg.ProductionBranch)
+	require.Equal(t, "", cfg.DevelopmentBranch, "empty means the repository's default branch")
+
+	cfg, err = relctlconfig.Load(write("production_branch: release\ndevelopment_branch: dev\n"))
+	require.NoError(t, err)
+	require.Equal(t, "release", cfg.ProductionBranch)
+	require.Equal(t, "dev", cfg.DevelopmentBranch)
+
+	// the former name still works
+	cfg, err = relctlconfig.Load(write("default_branch: trunk\n"))
+	require.NoError(t, err)
+	require.Equal(t, "trunk", cfg.ProductionBranch)
+
+	// the new name wins
+	cfg, err = relctlconfig.Load(write("default_branch: trunk\nproduction_branch: main\n"))
+	require.NoError(t, err)
+	require.Equal(t, "main", cfg.ProductionBranch)
+}
