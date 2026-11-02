@@ -33,6 +33,31 @@ var createCmd = &cobra.Command{
 	},
 }
 
+var gateArgs service.GateArgs
+
+var gateCmd = &cobra.Command{
+	Use:   "gate",
+	Short: "Check that the changelog may be released",
+	Long: `Check that the topmost changelog heading may be released.
+
+The gate passes only if
+  1. the topmost heading is a valid, dated version with release notes,
+  2. that version has not been released yet (no published release, no tag), and
+  3. (with --require-candidate, the default) a release candidate tag
+     X.Y.Z-rc.N points to the commit given with --sha (default: HEAD).
+
+All checks are reported even if an earlier one fails. The command exits with a
+non-zero status if any check fails, so it can be used as a required check on the
+pull request that releases.
+
+    relctl release gate --sha "$PR_HEAD_SHA"
+    relctl release gate --require-candidate=false`,
+	Run: func(cmd *cobra.Command, args []string) {
+		gateArgs.ConfigFile = releaseArgs.ConfigFile // persistent --config flag
+		service.ReleaseGate(&gateArgs)
+	},
+}
+
 var publishCmd = &cobra.Command{
 	Use:   "publish",
 	Short: "Publish a recently created GitHub release",
@@ -100,6 +125,7 @@ func init() {
 	// commands
 	Cmd.AddCommand(createCmd)
 	Cmd.AddCommand(publishCmd)
+	Cmd.AddCommand(gateCmd)
 
 	// Flags
 	Cmd.PersistentFlags().IntVar(&releaseArgs.PrNumber, "prnumber", 0, "overwrite the issue number")
@@ -114,6 +140,9 @@ func init() {
 	Cmd.PersistentFlags().StringVar(&releaseArgs.VersionScheme, "version-scheme", "", "versioning scheme to use: semver (default), calver, conventional-commits or changelog (overrides .relctl.yaml)")
 	Cmd.PersistentFlags().BoolVar(&releaseArgs.Prerelease, "prerelease", false, "create a release candidate (X.Y.Z-rc.N, marked as prerelease) for the computed version")
 	Cmd.PersistentFlags().StringVar(&releaseArgs.ConfigFile, "config", "", "path to .relctl.yaml config file")
+
+	gateCmd.Flags().StringVar(&gateArgs.Sha, "sha", "", "commit that must have a release candidate (default: HEAD)")
+	gateCmd.Flags().BoolVar(&gateArgs.RequireCandidate, "require-candidate", true, "require a release candidate tag for the commit")
 
 	// exclusive Flags
 	publishCmd.Flags().Int64VarP(&releaseID, "release-id", "", 0, "publish an early defined release (also looking for env RELCTL_RELEASE_ID)")

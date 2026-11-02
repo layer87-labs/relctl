@@ -2,6 +2,7 @@ package scmportal
 
 import (
 	"github.com/layer87-labs/relctl/internal/app/relctl/scm-portal/github"
+	"github.com/layer87-labs/relctl/internal/pkg/prerelease"
 	"github.com/layer87-labs/relctl/internal/pkg/uploadasset"
 )
 
@@ -89,4 +90,26 @@ func (lay SCMLayer) FindReleaseByTag(tag string) (*Release, bool, error) {
 // included) that start with prefix.
 func (lay SCMLayer) ListTagAndReleaseNames(prefix string) ([]string, error) {
 	return lay.Grc.(*github.GitHubRichClient).ListTagAndReleaseNames(prefix)
+}
+
+// CandidateCommits maps the tag of every existing release candidate of version
+// to the commit it points to. Candidates that only exist as a draft release (no
+// tag yet) are not included.
+func (lay SCMLayer) CandidateCommits(version string) (map[string]string, error) {
+	grc := lay.Grc.(*github.GitHubRichClient)
+	names, err := grc.ListTagAndReleaseNames(prerelease.Prefix(version))
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for _, name := range names {
+		sha, found, err := grc.TagCommit(name)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			out[name] = sha
+		}
+	}
+	return out, nil
 }
