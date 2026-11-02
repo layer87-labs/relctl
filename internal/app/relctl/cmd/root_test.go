@@ -25,7 +25,8 @@ func TestRootCmd(t *testing.T) {
 	}
 
 	if rootDir == "" {
-		t.Fatal("Directory not found", docsPath)
+		// The CLI reference lives in the separate docs repository.
+		t.Skip("docs directory not found:", docsPath)
 	}
 
 	docsPath = filepath.Join(rootDir, docsPath)
