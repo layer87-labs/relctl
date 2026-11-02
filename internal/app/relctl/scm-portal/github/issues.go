@@ -60,14 +60,14 @@ func (ghrc *GitHubRichClient) CommentHelpToPullRequest(number int) (err error) {
 	}
 	comments, _, err := ghrc.Client.Issues.ListComments(ctx, ghrc.Owner, ghrc.Repository, number, commentOpts)
 	if err != nil {
-		return fmt.Errorf("unable to list comments: %x", err)
+		return fmt.Errorf("unable to list comments on pull request %d: %w", number, err)
 	}
 
 	body := detailsOpening + `
 
 | command | description |
 | --- | --- |
-| relctl_patch_level: major | create a major version bump |
+| relctl_patch_level: major | create a major version bump (a branch prefix like feat!/ does the same) |
 | relctl_version_override: 2.1.0 | set the version to 2.1.0 using only semver compatible syntax! |
 
 Need more help?
@@ -90,7 +90,9 @@ This message was created by relctl and can be disabled by the env variable <code
 		}
 
 		_, _, err = ghrc.Client.Issues.CreateComment(ctx, ghrc.Owner, ghrc.Repository, number, prComment)
-		// err = CommentPullRequest(number, prComment)
+		if err != nil {
+			err = fmt.Errorf("unable to create help comment on pull request %d (the token needs the 'pull-requests: write' permission; read-only tokens, e.g. on fork PRs, cannot comment): %w", number, err)
+		}
 	} else {
 		// edit command if newer version deployed and commands changed
 		if *prComment.Body != body {
@@ -98,6 +100,9 @@ This message was created by relctl and can be disabled by the env variable <code
 				Body: &body,
 			}
 			_, _, err = ghrc.Client.Issues.EditComment(ctx, ghrc.Owner, ghrc.Repository, *prComment.ID, editedComment)
+			if err != nil {
+				err = fmt.Errorf("unable to update help comment on pull request %d (the token needs the 'pull-requests: write' permission): %w", number, err)
+			}
 		}
 	}
 	return

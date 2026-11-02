@@ -33,6 +33,18 @@ func TestPatchLevels(t *testing.T) {
 	require.Equal(t, semver.Major, patchLevel)
 }
 
+func TestBreakingBranchPrefix(t *testing.T) {
+	for _, branch := range []string{"feat!/test", "feature!/test", "fix!/test", "bugfix!/test", "chore!/test"} {
+		patchLevel, err := semver.ParsePatchLevelFormBranch(branch)
+		require.NoError(t, err, branch)
+		require.Equal(t, semver.Major, patchLevel, branch)
+	}
+
+	// a lone "!" is not a valid prefix
+	_, err := semver.ParsePatchLevelFormBranch("!/test")
+	require.Error(t, err)
+}
+
 func TestVersionIncrease(t *testing.T) {
 	nextVersion, err := semver.IncreaseVersion(semver.Bugfix, "0.0.1")
 	require.NoError(t, err)
