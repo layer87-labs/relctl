@@ -15,6 +15,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   generate-infos:
     name: Generate Build Infos
+    # pull-requests: write lets relctl post its help comment on the pull request
+    permissions:
+      contents: read
+      pull-requests: write
     uses: layer87-labs/relctl-action/.github/workflows/generate-build-infos.yml@main
     secrets:
       token: ${{ secrets.GITHUB_TOKEN }}

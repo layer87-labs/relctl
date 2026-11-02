@@ -37,7 +37,7 @@ relctl derives the SemVer bump level from the source branch name:
 |---|---|
 | `bugfix/`, `fix/`, `patch/`, `dependabot/` | Patch |
 | `feature/`, `feat/`, `minor/` | Minor |
-| `major/` | Major |
+| `major/`, or any prefix ending in `!` (`feat!/`, `fix!/`) | Major |
 
 ### Conventional Commits
 

@@ -56,7 +56,18 @@ func ParsePatchLevelFormBranch(branchName string) (patchLevel PatchLevel, err er
 	}
 }
 
+// ParsePatchLevel maps a branch prefix (or override keyword) to a PatchLevel.
+// A trailing "!" after a known alias marks a breaking change in the
+// Conventional Commits style ("feat!", "fix!") and results in a major bump.
+// An unknown alias with "!" is treated like any unknown alias.
 func ParsePatchLevel(alias string) (PatchLevel, error) {
+	if base, ok := strings.CutSuffix(alias, "!"); ok {
+		if _, err := ParsePatchLevel(base); err == nil {
+			return Major, nil
+		}
+		return Bugfix, ErrUseMinimalPatchVersion
+	}
+
 	switch alias {
 
 	case "patch", "bugfix", "fix", "dependabot":

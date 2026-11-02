@@ -33,6 +33,21 @@ func TestPatchLevels(t *testing.T) {
 	require.Equal(t, semver.Major, patchLevel)
 }
 
+func TestBreakingBranchPrefix(t *testing.T) {
+	for _, branch := range []string{"feat!/test", "feature!/test", "fix!/test", "bugfix!/test", "major!/test", "dependabot!/test"} {
+		patchLevel, err := semver.ParsePatchLevelFormBranch(branch)
+		require.NoError(t, err, branch)
+		require.Equal(t, semver.Major, patchLevel, branch)
+	}
+
+	// unknown or empty aliases do not become a major bump
+	for _, branch := range []string{"!/test", "foo!/test", "wip!/test", "!!/test"} {
+		patchLevel, err := semver.ParsePatchLevelFormBranch(branch)
+		require.Error(t, err, branch)
+		require.Equal(t, semver.Bugfix, patchLevel, branch)
+	}
+}
+
 func TestVersionIncrease(t *testing.T) {
 	nextVersion, err := semver.IncreaseVersion(semver.Bugfix, "0.0.1")
 	require.NoError(t, err)
