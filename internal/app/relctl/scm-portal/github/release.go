@@ -317,3 +317,24 @@ func (ghrc *GitHubRichClient) ListTagAndReleaseNames(prefix string) ([]string, e
 	}
 	return out, nil
 }
+
+// TagCommit returns the commit a tag points to (annotated tags are resolved),
+// and false if the tag does not exist.
+func (ghrc *GitHubRichClient) TagCommit(tag string) (string, bool, error) {
+	ref, resp, err := ghrc.Client.Git.GetRef(ctx, ghrc.Owner, ghrc.Repository, "tags/"+tag)
+	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("error at reading tag %q: %v", tag, err)
+	}
+	obj := ref.GetObject()
+	if obj.GetType() == "tag" {
+		t, _, err := ghrc.Client.Git.GetTag(ctx, ghrc.Owner, ghrc.Repository, obj.GetSHA())
+		if err != nil {
+			return "", false, fmt.Errorf("error at reading annotated tag %q: %v", tag, err)
+		}
+		return t.GetObject().GetSHA(), true, nil
+	}
+	return obj.GetSHA(), true, nil
+}
