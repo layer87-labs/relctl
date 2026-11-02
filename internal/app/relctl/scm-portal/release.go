@@ -143,3 +143,15 @@ func (lay SCMLayer) FindOpenPullRequest(head, base string) (int, error) {
 func (lay SCMLayer) CreatePullRequest(head, base, title, body string) (int, error) {
 	return lay.Grc.(*github.GitHubRichClient).CreatePullRequest(head, base, title, body)
 }
+
+// GenerateReleaseNotes returns the notes GitHub generates for a release of tag at target.
+// The notes start after the latest published release (never a release candidate), so a
+// candidate and the final release both list everything since the last real release.
+func (lay SCMLayer) GenerateReleaseNotes(tag, target string) (string, error) {
+	grc := lay.Grc.(*github.GitHubRichClient)
+	previous := ""
+	if latest, err := grc.GetLatestPublishedRelease(); err == nil && latest != nil && latest.TagName != nil {
+		previous = *latest.TagName
+	}
+	return grc.GenerateReleaseNotes(tag, target, previous)
+}
