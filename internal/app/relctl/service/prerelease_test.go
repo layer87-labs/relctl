@@ -28,3 +28,10 @@ func TestNextReleaseCandidate(t *testing.T) {
 	_, err = nextReleaseCandidate(list(nil, errors.New("boom")), "1.4.0")
 	require.ErrorContains(t, err, "boom")
 }
+
+func TestReleaseTarget(t *testing.T) {
+	require.Equal(t, "abc123", releaseTarget(&ReleaseArgs{MergeCommitSHA: "abc123", ReleaseBranch: "main"}),
+		"the merge commit wins over the branch")
+	require.Equal(t, "main", releaseTarget(&ReleaseArgs{ReleaseBranch: "main"}))
+	require.Equal(t, "", releaseTarget(&ReleaseArgs{}), "empty means the default branch")
+}
