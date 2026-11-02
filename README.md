@@ -11,7 +11,8 @@ successor of [awesome-ci](https://github.com/fullstack-devops/awesome-ci) (see
 [migrating](https://labs.layer87.de/docs/relctl/migrating-from-awesome-ci)).
 
 - **Source control**: GitHub and GitHub Enterprise.
-- **CI system**: GitHub Actions, GitLab CI, Jenkins, or any pipeline (`relctl connect`).
+- **CI system**: GitHub Actions and Jenkins are detected automatically. Any other pipeline (including GitLab CI)
+  connects once with `relctl connect github`.
 - **Four ways to get the version**: from the branch prefix, from Conventional Commits, from the date, or
   from a reviewed `CHANGELOG.md`.
 - **Technology**: Go, Cobra. Status: stable.
@@ -136,7 +137,7 @@ development_branch: dev      # default: the default branch of the repository
 | `relctl pr info` | version a pull request would produce |
 | `relctl parse json\|yaml\|version` | read values from JSON, YAML or version strings |
 | `relctl transform group-by` | group a JSON list by a key |
-| `relctl connect github` | persist an encrypted connection (for pipelines without a detectable runner) |
+| `relctl connect github` | store a connection for pipelines that cannot be detected (GitLab CI, local shell). The token is only obscured, not protected: keep `.awesomerc.yaml` out of Git and treat it like a token |
 
 Variables are exported to the pipeline (GitHub Actions: `$GITHUB_ENV` and step outputs):
 `RELCTL_VERSION`, `RELCTL_NEXT_VERSION`, `RELCTL_RELEASE_ID`, `RELCTL_LATEST_VERSION`, `RELCTL_PR`, …
