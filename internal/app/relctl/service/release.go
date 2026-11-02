@@ -372,6 +372,16 @@ func isChangelogScheme(args *ReleaseArgs) bool {
 	return err == nil && scheme == relctlconfig.SchemeChangelog
 }
 
+// existingReleaseEnv adds the release id to the exported variables only for a draft:
+// a pipeline continues with the id (build, publish), so a published release must not
+// hand one out, or the pipeline would build and upload into a finished release.
+func existingReleaseEnv(envVars []ces.KeyValue, id int64, draft bool) []ces.KeyValue {
+	if !draft {
+		return envVars
+	}
+	return append(envVars, ces.KeyValue{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", id)})
+}
+
 // changelogAlreadyReleased reports whether version already has a release or
 // tag. In that case it exports the version (and the release id, if any) and
 // the caller must not create another release.
@@ -392,7 +402,7 @@ func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool
 			log.Infof("release %s already exists, nothing to release", version)
 		}
 		fmt.Printf("Release %s already exists (id %d), nothing to create\n", version, existing.ID)
-		envVars = append(envVars, ces.KeyValue{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", existing.ID)})
+		envVars = existingReleaseEnv(envVars, existing.ID, draft)
 		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
 			log.Fatalf("could not export env variables: %v", err)
 		}

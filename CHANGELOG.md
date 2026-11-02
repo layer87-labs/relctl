@@ -3,6 +3,14 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
+## 2.10.2 — 2026-11-02
+
+- `relctl release create` no longer hands out a release id for a release that is already published. A pipeline
+  that ran again for a released version built its binaries and uploaded them into the published release; now it
+  stops after `release create`.
+- The download links in the asset table of a release text point to the final addresses; before, they pointed to a
+  temporary address that stopped working once the release was published.
+
 ## 2.10.1 — 2026-11-02
 
 - Release notes: releases created by the `semver`, `conventional-commits` and `calver` schemes now carry the notes
