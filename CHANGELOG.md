@@ -3,6 +3,14 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
+## 2.10.1 — 2026-11-02
+
+- Release notes: releases created by the `semver`, `conventional-commits` and `calver` schemes now carry the notes
+  GitHub generates (merged pull requests since the last published release, grouped by `.github/release.yml`).
+  Before, only the asset list was written.
+- `--body` accepts a text again; before, any value that was not an existing file failed.
+- The uploaded assets are listed as a table with size and SHA-256.
+
 ## 2.10.0 — 2026-11-02
 
 - `relctl connect github` stores no token any more: `.relctl-connection.yaml` holds server and repository only,
