@@ -143,7 +143,38 @@ func (ghrc *GitHubRichClient) PublishRelease(
 		return releaseAssets, err
 	}
 
+	// A draft's download links point to a temporary "untagged-…" address that stops working
+	// once the tag exists. Now that the release is published, link to the final addresses.
+	if len(uploaded) > 0 {
+		if err := ghrc.relinkAssets(releaseID, base, uploaded); err != nil {
+			logrus.Warnf("could not replace the asset links in the release text: %v", err)
+		}
+	}
+
 	return
+}
+
+// relinkAssets rewrites the asset table of a published release with the final download links.
+func (ghrc *GitHubRichClient) relinkAssets(releaseID int64, text string, uploaded []assetRow) error {
+	published, _, err := ghrc.Client.Repositories.GetRelease(ctx, ghrc.Owner, ghrc.Repository, releaseID)
+	if err != nil {
+		return err
+	}
+	urls := make(map[string]string, len(published.Assets))
+	for _, a := range published.Assets {
+		urls[a.GetName()] = a.GetBrowserDownloadURL()
+	}
+	rows := make([]assetRow, len(uploaded))
+	for i, row := range uploaded {
+		rows[i] = row
+		if u, ok := urls[row.Name]; ok && u != "" {
+			rows[i].URL = u
+		}
+	}
+	body := composeReleaseBody(text, rows)
+	published.Body = &body
+	_, _, err = ghrc.Client.Repositories.EditRelease(ctx, ghrc.Owner, ghrc.Repository, releaseID, published)
+	return err
 }
 
 // GetLatestReleaseVersion retrieves the latest release version from the GitHub repository.

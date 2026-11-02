@@ -4,6 +4,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,5 +51,20 @@ func TestReleaseBody(t *testing.T) {
 	}
 	if got := releaseBody("", failing); got != "" {
 		t.Errorf("a failure must not stop the release, got %q", got)
+	}
+}
+
+func TestExistingReleaseEnv(t *testing.T) {
+	base := []ces.KeyValue{{Name: "RELCTL_VERSION", Value: "1.0.0"}}
+
+	draft := existingReleaseEnv(base, 42, true)
+	require.Len(t, draft, 2)
+	require.Equal(t, "RELCTL_RELEASE_ID", draft[1].Name)
+	require.Equal(t, "42", draft[1].Value)
+
+	published := existingReleaseEnv(base, 42, false)
+	require.Len(t, published, 1, "a published release must not hand out an id")
+	for _, kv := range published {
+		require.NotEqual(t, "RELCTL_RELEASE_ID", kv.Name)
 	}
 }
