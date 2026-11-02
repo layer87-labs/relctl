@@ -39,9 +39,9 @@ const IssuesURL = "https://github.com/layer87-labs/relctl/issues"
 func unsupportedSCMError(t rcpersist.SCMPortalType) error {
 	switch t {
 	case rcpersist.SCMPortalTypeGitLab:
-		return fmt.Errorf("GitLab is not supported as source control system. relctl currently supports GitHub and GitHub Enterprise "+
-			"(the CI system can be GitHub Actions, GitLab CI, Jenkins or a custom pipeline). "+
-			"If you need GitLab, please open an issue and describe your use case: %s", IssuesURL)
+		return fmt.Errorf("GitLab is not supported as source control system. relctl supports GitHub and GitHub Enterprise. "+
+			"If your repository is on GitHub and only the CI is GitLab CI, run 'relctl connect github' first so that relctl "+
+			"knows the repository. If you need GitLab as source control, please open an issue and describe your use case: %s", IssuesURL)
 	case "":
 		return fmt.Errorf("no CI environment or connection detected. Run in GitHub Actions, in Jenkins or GitLab CI " +
 			"with GITHUB_REPOSITORY and GITHUB_TOKEN set, or run 'relctl connect github' first")
