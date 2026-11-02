@@ -37,6 +37,43 @@ pull requests, comments, commit messages and release notes, is world-readable.
   GitHub repository (inject fakes, keep decision logic in pure functions).
 - Do not mock-pass: never skip, delete or weaken a test to get green.
 
+## Architecture in one page
+
+```
+cmd/relctl                      entrypoint
+internal/app/relctl/cmd         cobra commands (pr, release, parse, connect, transform) — thin, no logic
+internal/app/relctl/service     use cases: release create/publish, pr info, version derivation per scheme
+internal/app/relctl/scm-portal  provider-neutral SCM layer; scm-portal/github is the only implementation
+internal/app/relctl/ces         code execution service detection (GitHub Actions, Jenkins, GitLab) and
+                                export of RELCTL_* variables / step outputs
+internal/pkg/semver             bump levels, branch-prefix parsing
+internal/pkg/versioning         CalVer scheme
+internal/pkg/conventionalcommits  commit classification, git log walking
+internal/pkg/relctlconfig       .relctl.yaml (version_scheme, changelog_file, default_branch)
+internal/pkg/rcpersist          .awesomerc.yaml written by `relctl connect`
+```
+
+**Version schemes** (`version_scheme` in `.relctl.yaml` or `--version-scheme`): `semver` (default,
+bump from the merged branch prefix, plus PR comment overrides), `conventional-commits` (bump from
+commits since the last published release; squash-merge only), `calver` (`YYYYMM.DD.N` from local
+tags), `changelog` (topmost `## X.Y.Z — YYYY-MM-DD` heading of `CHANGELOG.md`). The choice is
+resolved in `service.argsToVersion`; each scheme has its own file or package and its own tests.
+
+**Release flow:** `release create` computes the version, creates a *draft* GitHub release and exports
+`RELCTL_VERSION`, `RELCTL_NEXT_VERSION` and `RELCTL_RELEASE_ID`; `release publish` uploads assets and
+publishes. `pr info` computes the same version for a pull request without releasing.
+
+**Compatibility with awesome-ci** (the predecessor): legacy `aci_*` PR comment commands and `ACI_SILENT`
+are still accepted; `RELCTL_LEGACY_ACI_ENV=true` additionally exports `ACI_*` aliases.
+
+**Where the documentation lives:** user documentation (CLI reference, version schemes, release flows,
+migration from awesome-ci) is in the `docs` repository under `docs/relctl/`. The reusable workflows and
+the setup action are in `relctl-action`. When behaviour changes, update the docs and the action too.
+
+**Adding a version scheme:** put the logic in its own package with table-driven unit tests, add a
+constant in `relctlconfig`, wire it in `service.argsToVersion`, list it in the `--version-scheme` flag
+help, and document it in `docs/relctl/version-schemes.md`.
+
 ## Releases and versioning
 
 - Pull requests are squash-merged to `main`; every merge to `main` creates a release.
