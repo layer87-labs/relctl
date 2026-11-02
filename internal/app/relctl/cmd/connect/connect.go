@@ -18,7 +18,7 @@ var Cmd = &cobra.Command{
 	Short: "Create an encrypted .rc file to persistently connect to GitHub or GitHub Enterprise",
 	Long: `Initial connection to a GitHub or GitHub Enterprise
 creates an encrypted .rc file to persistently connect to GitHub
-soon you can also connect to GitLab (not yet implemented)
+GitLab is not supported as source control system (open an issue if you need it)
 useful without a runner or in an jenkins pipeline`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()

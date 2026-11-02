@@ -27,7 +27,7 @@ func CheckConnection() {
 			log.Infof("Successfully connected to github with .rc file to %s", rcFile.ConnectCreds.ServerURL)
 
 		case rcpersist.SCMPortalTypeGitLab:
-			log.Warnf("gitlab not yet implemented")
+			log.Fatalf("GitLab is not supported as source control system. If you need it, please open an issue: https://github.com/layer87-labs/relctl/issues")
 
 		default:
 			log.Fatal("Type in rcFile not known")
