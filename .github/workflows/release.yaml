@@ -12,6 +12,13 @@ permissions:
   id-token: write
   packages: write
 
+# Release runs must not overlap: two runs computing the next version at the same
+# time would create duplicate releases for the same version. A run that is still
+# queued when a newer commit arrives is superseded by it.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   # ──────────────────────────────────────────────────────────────────────────────
   # Create Release – reusable workflow from relctl-action
