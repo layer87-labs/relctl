@@ -11,20 +11,24 @@ func CheckConnection() {
 	rcFile := rcpersist.NewRcInstance()
 
 	if rcFile.Exists() {
-		log.Infoln("found existing .rc file")
+		log.Infoln("found existing connection file")
 
 		creds, err := rcFile.Load()
+		if err != nil {
+			log.Fatalln(err)
+		}
+		token, err := rcFile.PlainToken()
 		if err != nil {
 			log.Fatalln(err)
 		}
 
 		switch rcFile.SCMPortalType {
 		case rcpersist.SCMPortalTypeGitHub:
-			_, err = github.NewGitHubClient(&creds.ServerURL, &creds.Repository, creds.TokenPlain)
+			_, err = github.NewGitHubClient(&creds.ServerURL, &creds.Repository, &token)
 			if err != nil {
 				log.Fatalf("connection to github could not be established please check. %v", err)
 			}
-			log.Infof("Successfully connected to github with .rc file to %s", rcFile.ConnectCreds.ServerURL)
+			log.Infof("Successfully connected to github with the connection file to %s", rcFile.ConnectCreds.ServerURL)
 
 		case rcpersist.SCMPortalTypeGitLab:
 			log.Fatalf("GitLab is not supported as source control system. If you need it, please open an issue: https://github.com/layer87-labs/relctl/issues")
@@ -34,6 +38,6 @@ func CheckConnection() {
 		}
 
 	} else {
-		log.Fatalf("no .rc found, please connect first")
+		log.Fatalf("no connection file found, please connect first")
 	}
 }

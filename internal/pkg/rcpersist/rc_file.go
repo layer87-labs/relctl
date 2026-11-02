@@ -1,6 +1,7 @@
 package rcpersist
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
@@ -14,53 +15,66 @@ func (t Token) ToString() string {
 	return string(t)
 }
 
+// Decrypt reads a token that an earlier version stored in the legacy file.
 func (t Token) Decrypt() (string, error) {
-	if decryptedToken, err := tools.DecryptString(t.ToString(), rcTokenKey); err != nil {
+	decryptedToken, err := tools.DecryptString(t.ToString(), legacyTokenKey)
+	if err != nil {
 		return "", fmt.Errorf("could not decrypt token: %v", err)
-	} else {
-		return decryptedToken, nil
 	}
-}
-
-func (t Token) Encrypt() (string, error) {
-	if encryptedToken, err := tools.EncryptString(t.ToString(), rcTokenKey); err != nil {
-		return "", fmt.Errorf("could not encrypt token: %v", err)
-	} else {
-		return encryptedToken, nil
-	}
+	return decryptedToken, nil
 }
 
 func NewRcInstance() *RcFile {
 	return &RcFile{}
 }
 
-func (rc *RcFile) Exists() bool {
-	return tools.CheckFileExists(rcFileName)
+// activeFile returns the connection file in use: the current one, else the legacy one.
+func activeFile() (name string, legacy bool) {
+	if tools.CheckFileExists(rcFileName) {
+		return rcFileName, false
+	}
+	if tools.CheckFileExists(legacyRcFileName) {
+		return legacyRcFileName, true
+	}
+	return "", false
 }
 
+func (rc *RcFile) Exists() bool {
+	name, _ := activeFile()
+	return name != ""
+}
+
+// Load reads the connection file. A token is resolved separately by PlainToken.
 func (rc *RcFile) Load() (creds *ConnectCredentials, err error) {
-	if !rc.Exists() {
+	name, legacy := activeFile()
+	if name == "" {
 		return nil, ErrRcFileNotExists
 	}
 
-	// load rc file
-	yamlFile, err := os.ReadFile(rcFileName)
+	yamlFile, err := os.ReadFile(name)
 	if err != nil {
-		return nil, fmt.Errorf("error while opening existing rc file. %v", err)
+		return nil, fmt.Errorf("error while opening existing connection file. %v", err)
 	}
-	log.Tracef("Successfully read file %s", rcFileName)
+	if err = yaml.Unmarshal(yamlFile, rc); err != nil {
+		return nil, fmt.Errorf("error at reading file %s: %v", name, err)
+	}
+	log.Tracef("Successfully read file %s", name)
 
-	if err = yaml.Unmarshal(yamlFile, &rc); err != nil {
-		return nil, fmt.Errorf("error at reading file %s: %v", rcFileName, err)
+	if legacy {
+		log.Warnf("%s is a legacy connection file; run 'relctl connect github' to replace it with %s (no token is stored any more)", name, rcFileName)
 	}
-	log.Tracef("Successfully unmarshal file %s", rcFileName)
-
-	plainToken, err := rc.ConnectCreds.Token.Decrypt()
-	if err != nil {
-		return nil, err
-	}
-	rc.ConnectCreds.TokenPlain = &plainToken
 	return &rc.ConnectCreds, nil
+}
+
+// PlainToken returns the token: GITHUB_TOKEN first, then a token from a legacy file.
+func (rc *RcFile) PlainToken() (string, error) {
+	if token := os.Getenv(tokenEnvName); token != "" {
+		return token, nil
+	}
+	if rc.ConnectCreds.Token != "" {
+		return rc.ConnectCreds.Token.Decrypt()
+	}
+	return "", ErrNoToken
 }
 
 func (rc *RcFile) UpdateSCMPortalType(scmPortalType SCMPortalType) {
@@ -71,43 +85,46 @@ func (rc *RcFile) UpdateCESType(cesType CESType) {
 	rc.CESType = cesType
 }
 
-func (rc *RcFile) UpdateCreds(server string, repo string, token string) error {
-	if rc.ConnectCreds.Token.ToString() != token {
-		rc.ConnectCreds.TokenPlain = &token
-		if encryptedToken, err := Token(token).Encrypt(); err != nil {
-			return err
-		} else {
-			rc.ConnectCreds.Token = Token(encryptedToken)
-		}
-	}
-	if rc.ConnectCreds.ServerURL != server {
-		rc.ConnectCreds.ServerURL = server
-	}
-	if rc.ConnectCreds.Repository != repo {
-		rc.ConnectCreds.Repository = repo
-	}
-	return nil
+func (rc *RcFile) UpdateCreds(server string, repo string) {
+	rc.ConnectCreds.ServerURL = server
+	rc.ConnectCreds.Repository = repo
 }
 
+// Save writes server and repository. It never writes a token and removes a legacy file.
 func (rc *RcFile) Save() (err error) {
+	rc.ConnectCreds.Token = ""
 	rc.ConnectCreds.TokenPlain = nil
-	_ = os.Truncate(rcFileName, 0)
 
 	yamlData, err := yaml.Marshal(rc)
 	if err != nil {
 		return fmt.Errorf("error while Marshaling. %v", err)
 	}
 	if err := os.WriteFile(rcFileName, yamlData, 0600); err != nil {
-		return fmt.Errorf("unable to write data into rc file")
+		return fmt.Errorf("unable to write data into %s: %v", rcFileName, err)
 	}
 	log.Tracef("Successfully written config to %s", rcFileName)
 
-	return checkGitIgnore()
+	if err := os.Remove(legacyRcFileName); err == nil {
+		log.Infof("removed legacy %s, it contained a token", legacyRcFileName)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("could not remove legacy %s: %v", legacyRcFileName, err)
+	}
+	return nil
 }
 
+// RemoveRcFile removes the connection file and a legacy file, if present.
 func RemoveRcFile() {
-	err := os.Remove(rcFileName) // remove a single file
-	if err != nil {
-		log.Fatalf("error at removing %s: %v", rcFileName, err)
+	removed := false
+	for _, name := range []string{rcFileName, legacyRcFileName} {
+		err := os.Remove(name)
+		switch {
+		case err == nil:
+			removed = true
+		case !errors.Is(err, os.ErrNotExist):
+			log.Fatalf("error at removing %s: %v", name, err)
+		}
+	}
+	if !removed {
+		log.Fatalf("no connection file found (%s)", rcFileName)
 	}
 }
