@@ -22,6 +22,7 @@ func TestTop(t *testing.T) {
 		{"crlf", "## 1.0.0\r\n\r\ntext\r\n", changelog.Heading{Version: "1.0.0"}, nil},
 		{"topmost wins", "## 2.0.0\n## 1.0.0 — 2026-01-01\n", changelog.Heading{Version: "2.0.0"}, nil},
 		{"ignores code fence", "```\n## 9.9.9\n```\n## 1.0.0\n", changelog.Heading{Version: "1.0.0"}, nil},
+		{"indented code is not a fence", "    ```\n## 1.0.0\n", changelog.Heading{Version: "1.0.0"}, nil},
 		{"ignores level 3", "### 9.9.9\n## 1.0.0\n", changelog.Heading{Version: "1.0.0"}, nil},
 		{"no heading", "# Changelog\n", changelog.Heading{}, changelog.ErrNoHeading},
 		{"empty", "", changelog.Heading{}, changelog.ErrNoHeading},

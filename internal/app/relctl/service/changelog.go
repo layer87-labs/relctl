@@ -30,6 +30,28 @@ func changelogRelease(content string) (version, notes string, err error) {
 	return h.Version, notes, nil
 }
 
+// changelogNotes returns the release notes for version from the configured
+// changelog. If the topmost heading belongs to a different version (an
+// explicit --version was given), no notes are returned.
+func changelogNotes(args *ReleaseArgs, version string) (string, error) {
+	path, err := changelogFileFor(args)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("changelog: %w", err)
+	}
+	h, err := changelog.Top(string(data))
+	if err != nil {
+		return "", err
+	}
+	if h.Version != version {
+		return "", nil
+	}
+	return changelog.Section(string(data))
+}
+
 // changelogFileFor returns the changelog path from the config file.
 func changelogFileFor(args *ReleaseArgs) (string, error) {
 	cfgPath := args.ConfigFile

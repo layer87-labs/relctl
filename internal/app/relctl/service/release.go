@@ -51,24 +51,17 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Fatalln(err)
 	}
 
-	if scheme, schemeErr := resolveVersionScheme(args); schemeErr == nil && scheme == relctlconfig.SchemeChangelog {
+	if isChangelogScheme(args) {
 		if body == "" {
-			if _, notes, notesErr := changelogReleaseFromFile(args); notesErr == nil {
-				body = notes
+			notes, notesErr := changelogNotes(args, version)
+			if notesErr != nil {
+				log.Fatalln(notesErr)
 			}
+			body = notes
 		}
-		// Idempotent: a version that is already tagged is not released again.
-		if exists, tagErr := scmLayer.TagExists(version); tagErr != nil {
-			log.Fatalln(tagErr)
-		} else if exists {
-			log.Infof("tag %s already exists, nothing to release", version)
-			fmt.Printf("Tag %s already exists, nothing to release\n", version)
-			if err := scmLayer.CES.ExportAsEnv([]ces.KeyValue{
-				{Name: "RELCTL_VERSION", Value: version},
-				{Name: "RELCTL_NEXT_VERSION", Value: version},
-			}); err != nil {
-				log.Fatalf("could not export env variables: %v", err)
-			}
+		// Idempotent: a version that already has a release (draft or published)
+		// or a tag is not released again.
+		if done := changelogAlreadyReleased(scmLayer, version); done {
 			return
 		}
 	}
@@ -124,6 +117,20 @@ func ReleasePublish(args *ReleaseArgs, releaseID int64, assetsStr []string) {
 		if err != nil {
 			log.Fatalln(err)
 		}
+
+		if isChangelogScheme(args) {
+			existing, draft, findErr := scmLayer.FindReleaseByTag(version)
+			if findErr != nil {
+				log.Fatalln(findErr)
+			}
+			switch {
+			case existing != nil && !draft:
+				log.Infof("release %s is already published, nothing to do", version)
+				return
+			case existing != nil:
+				releaseID = existing.ID
+			}
+		}
 	}
 
 	var assets []uploadasset.UploadAsset
@@ -141,6 +148,11 @@ func ReleasePublish(args *ReleaseArgs, releaseID int64, assetsStr []string) {
 	body, err := tools.ReadFileToString(args.Body)
 	if err != nil {
 		log.Warnf("could not process the given body: %v", err)
+	}
+	if body == "" && version != "" && isChangelogScheme(args) {
+		if notes, notesErr := changelogNotes(args, version); notesErr == nil {
+			body = notes
+		}
 	}
 
 	if args.DryRun {
@@ -314,4 +326,51 @@ func getPrFromMergeMessage() (pr int, err error) {
 	return 0, errors.New("No PR found in merge message pls make shure this regex matches: " + regex +
 		"\nExample: Merge pull request #3 from some-orga/feature/awesome-feature" +
 		"\nAlternativly provide the PR-Number by adding the argument -number <int>")
+}
+
+func isChangelogScheme(args *ReleaseArgs) bool {
+	scheme, err := resolveVersionScheme(args)
+	return err == nil && scheme == relctlconfig.SchemeChangelog
+}
+
+// changelogAlreadyReleased reports whether version already has a release or
+// tag. In that case it exports the version (and the release id, if any) and
+// the caller must not create another release.
+func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool {
+	envVars := []ces.KeyValue{
+		{Name: "RELCTL_VERSION", Value: version},
+		{Name: "RELCTL_NEXT_VERSION", Value: version},
+	}
+
+	existing, draft, err := scmLayer.FindReleaseByTag(version)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if existing != nil {
+		if draft {
+			log.Infof("a draft release for %s already exists (id %d), reusing it", version, existing.ID)
+		} else {
+			log.Infof("release %s already exists, nothing to release", version)
+		}
+		fmt.Printf("Release %s already exists (id %d), nothing to create\n", version, existing.ID)
+		envVars = append(envVars, ces.KeyValue{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", existing.ID)})
+		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
+			log.Fatalf("could not export env variables: %v", err)
+		}
+		return true
+	}
+
+	tagExists, err := scmLayer.TagExists(version)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if tagExists {
+		log.Infof("tag %s already exists, nothing to release", version)
+		fmt.Printf("Tag %s already exists, nothing to release\n", version)
+		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
+			log.Fatalf("could not export env variables: %v", err)
+		}
+		return true
+	}
+	return false
 }

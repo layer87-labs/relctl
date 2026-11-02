@@ -70,3 +70,17 @@ func (lay SCMLayer) PublishRelease(tagName string, releasePrefix string, branch 
 func (lay SCMLayer) TagExists(tag string) (bool, error) {
 	return lay.Grc.(*github.GitHubRichClient).TagExists(tag)
 }
+
+// FindReleaseByTag returns the release (draft or published) for the tag, or
+// nil if there is none. The second return value reports whether it is a draft.
+func (lay SCMLayer) FindReleaseByTag(tag string) (*Release, bool, error) {
+	r, err := lay.Grc.(*github.GitHubRichClient).FindReleaseByTag(tag)
+	if err != nil || r == nil {
+		return nil, false, err
+	}
+	rel := &Release{ID: r.GetID(), TagName: r.GetTagName(), Name: r.GetName(), Commit: r.GetTargetCommitish()}
+	if r.PublishedAt != nil {
+		rel.PublishedAt = &r.PublishedAt.Time
+	}
+	return rel, r.GetDraft(), nil
+}

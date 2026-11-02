@@ -98,8 +98,14 @@ func locate(content string) ([]string, Heading, int, error) {
 	return nil, Heading{}, 0, ErrNoHeading
 }
 
+// isFence reports whether line opens or closes a fenced code block. As in
+// CommonMark, a fence is indented by at most three spaces.
 func isFence(line string) bool {
-	t := strings.TrimLeft(line, " ")
+	n := len(line) - len(strings.TrimLeft(line, " "))
+	if n > 3 {
+		return false
+	}
+	t := line[n:]
 	return strings.HasPrefix(t, "```") || strings.HasPrefix(t, "~~~")
 }
 
