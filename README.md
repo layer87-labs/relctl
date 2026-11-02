@@ -3,183 +3,172 @@
 [![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/layer87-labs/relctl.svg)](https://github.com/layer87-labs/relctl)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/layer87-labs/relctl/blob/main/LICENSE)
 
-[![Publish Release](https://github.com/layer87-labs/relctl/actions/workflows/Release.yaml/badge.svg)](https://github.com/layer87-labs/relctl/actions/workflows/Release.yaml)
-[![gh-pages](https://github.com/layer87-labs/relctl/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/layer87-labs/relctl/actions/workflows/pages/pages-build-deployment)
-
 # relctl
 
-**Description**: relctl is a provider-agnostic release management CLI for CI/CD pipelines.
-It supports three versioning schemes – [SemVer](https://semver.org/) (branch-prefix driven),
-SemVer via [Conventional Commits](https://www.conventionalcommits.org/) (commit-message driven),
-and [CalVer](https://calver.org/) – and integrates with GitHub, GitHub Enterprise, GitLab, and Jenkins.
+**relctl** is a release management CLI for CI/CD pipelines. It works out the next version of your
+project, creates the GitHub release and keeps your pipeline free of release boilerplate. It is the
+successor of [awesome-ci](https://github.com/fullstack-devops/awesome-ci) (see
+[migrating](https://labs.layer87.de/docs/relctl/migrating-from-awesome-ci)).
 
-- **Technology stack**: Go, Cobra CLI
-- **Status**: Stable
-- **Supported environments**:
-  - GitHub & GitHub Enterprise (GitHub Actions)
-  - GitLab (GitLab CI)
-  - Jenkins Pipelines
-- **Versioning schemes**: SemVer (branch-prefix driven) · Conventional Commits (commit-message driven SemVer) · CalVer (date-based, git-tag driven)
+- **Source control**: GitHub and GitHub Enterprise.
+- **CI system**: GitHub Actions, GitLab CI, Jenkins, or any pipeline (`relctl connect`).
+- **Four ways to get the version**: from the branch prefix, from Conventional Commits, from the date, or
+  from a reviewed `CHANGELOG.md`.
+- **Technology**: Go, Cobra. Status: stable.
 
-## Getting Started
+> GitLab as source control system is not supported. If you need it, please
+> [open an issue](https://github.com/layer87-labs/relctl/issues) and describe your use case.
 
-Download the [latest release](https://github.com/layer87-labs/relctl/releases/latest/download/relctl)
-and add it to your `PATH`, or use the
-[layer87-labs/relctl-action](https://github.com/layer87-labs/relctl-action) in GitHub Actions.
+## Quick start (5 minutes, GitHub Actions)
 
-## Versioning Schemes
+**1. Name your branches by what they change.** The prefix decides the version bump of the pull request:
 
-### SemVer (default)
+| Branch prefix | Bump | Example |
+| --- | --- | --- |
+| `fix/`, `bugfix/`, `patch/`, `dependabot/` | patch | 1.2.3 → 1.2.4 |
+| `feat/`, `feature/`, `minor/` | minor | 1.2.3 → 1.3.0 |
+| `major/`, or any prefix ending in `!` (`feat!/`) | major | 1.2.3 → 2.0.0 |
 
-relctl derives the SemVer bump level from the source branch name:
-
-| Branch prefix | Bump |
-|---|---|
-| `bugfix/`, `fix/`, `patch/`, `dependabot/` | Patch |
-| `feature/`, `feat/`, `minor/` | Minor |
-| `major/`, or any prefix ending in `!` (`feat!/`, `fix!/`) | Major |
-
-### Conventional Commits
-
-relctl derives the SemVer bump level from the commit messages between the last **published**
-release (not draft, not prerelease) and the target commit, following the
-[Conventional Commits](https://www.conventionalcommits.org/) specification:
-
-| Rule | Bump |
-|---|---|
-| any commit with `!` after type/scope (`feat!:`, `fix(api)!:`), or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer in the body | Major |
-| otherwise, at least one `feat` commit | Minor |
-| otherwise, at least one commit of a recognised Conventional Commits type (`fix`, `perf`, `refactor`, `docs`, `style`, `test`, `chore`, `ci`, `build`, `revert`) | Patch |
-| no commit matches any of the above | No release – `relctl release create` fails with a clear error |
-
-The commit range and messages come **exclusively from the local Git history** – no SCM API call
-for the commits themselves, fully provider-agnostic. Finding the *last published release* still
-uses the SCM API, the same way the existing `--hotfix` flag does.
-
-> **Prerequisite**: the repository must be checked out with full history (`fetch-depth: 0`),
-> same as CalVer.
-
-> **Squash merges only**: relctl walks the **first-parent chain** from HEAD down to the last
-> published release. With a squash-merge workflow that chain *is* the sequence of PR
-> title / squash commit messages, one per merge, each carrying its type directly – this is the
-> supported case. If relctl finds a commit with more than one parent (a real merge commit) in
-> that range, it **fails with a clear error** (`ErrMergeCommitInRange`) instead of guessing –
-> a merge commit means the first-parent chain no longer represents "one commit per PR", and
-> silently walking past it could understate the bump. Repositories that bring in multi-commit
-> PRs via a merge commit (rather than squashing) are not supported by this scheme.
-
-`--version` as an explicit override always takes precedence, exactly like for SemVer and CalVer.
-
-### CalVer
-
-Format: **`YYYY.MM.DD.N`** – e.g. `2026.06.01.3`
-
-- `YYYY.MM.DD` – current date in UTC
-- `N` – monotonically increasing counter per day, 1-based
-
-N is calculated **exclusively from local Git tags** – no SCM API call, fully provider-agnostic.
-relctl lists all tags matching `YYYY.MM.DD.*` for today and sets N to `max(N) + 1` (or `1` if no tag exists yet).
-
-> **Prerequisite**: the repository must be checked out with full tag history (`fetch-depth: 0`).
-> This is already a general relctl requirement.
-
-## Configuration
-
-### `.relctl.yaml` (repo-level config file)
-
-Place a `.relctl.yaml` in your repository root to set project-wide defaults:
+**2. Add a release workflow.** Every merge to `main` creates a draft release, builds, and publishes it:
 
 ```yaml
-version_scheme: calver   # semver (default) | calver | conventional-commits
-default_branch: main
+# .github/workflows/release.yaml
+name: Release
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write        # create and publish releases
+  pull-requests: write   # relctl posts a help comment on pull requests
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with: { fetch-depth: 0 }
+
+      - uses: layer87-labs/relctl-action@v1
+        with: { github-token: "${{ secrets.GITHUB_TOKEN }}" }
+
+      - id: release
+        run: relctl release create --merge-sha ${{ github.sha }}
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+
+      # ... build your artifacts, use ${{ steps.release.outputs.RELCTL_VERSION }} ...
+
+      - run: relctl release publish --release-id ${{ steps.release.outputs.RELCTL_RELEASE_ID }} --asset "file=dist/app"
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
 ```
 
-The file is optional. When absent, relctl behaves exactly as before (SemVer, `main`).
+**3. Preview the version on pull requests** (optional): `relctl pr info` prints the version a pull request
+would produce, and relctl posts a help comment on the pull request.
 
-**Priority**: `--version-scheme` flag > `.relctl.yaml` > built-in default (SemVer)
+That is all. Without a config file relctl uses SemVer from the branch prefix.
 
-### CLI Flags
+### Overriding the version on a pull request
 
-| Flag | Scope | Description |
-|---|---|---|
-| `--config <path>` | `relctl`, `release` | Override config file path (default: `.relctl.yaml`) |
-| `--version-scheme <scheme>` | `release` | `semver`, `calver` or `conventional-commits`; overrides config file |
+Comment on the pull request before merging. The comment must start with the command:
 
-## Usage
+| Comment | Effect |
+| --- | --- |
+| `relctl_patch_level: major` | force a bump level |
+| `relctl_version_override: 2.1.0` | pin the version |
 
-### SemVer release (existing workflow, unchanged)
+## Choose your flow
+
+| | Flow 1 | Flow 2 | Flow 3 |
+| --- | --- | --- | --- |
+| Release | every merge to `main` | every merge to `main` | merging a release pull request |
+| Version from | branch prefix | commit messages or date | `CHANGELOG.md` heading |
+| `version_scheme` | `semver` (default) | `conventional-commits`, `calver` | `changelog` |
+| Good for | libraries, CLIs | services, apps | products with deliberate releases |
+
+### Flow 3 in short: reviewed releases from a development branch
+
+Work lands on `dev`; the version is written down in `CHANGELOG.md` and visible in review:
+
+```markdown
+## 1.4.0                   <- upcoming (on dev)
+## 1.4.0 — 2026-10-02      <- released: version, dash, ISO date
+```
 
 ```bash
-# After merging a PR – relctl reads the PR branch and GitHub API
-relctl release create
-relctl release publish --release-id "$RELCTL_RELEASE_ID" --asset "file=dist/binary"
+relctl release create --prerelease     # every push to dev: 1.4.0-rc.1, rc.2, ... (prerelease)
+relctl release gate --sha "$HEAD_SHA"  # required check on the release pull request (dev -> main)
+relctl release create                  # on main: creates 1.4.0 from the dated heading, idempotent
+relctl release forward                 # afterwards: bring main back into dev
 ```
 
-### Conventional Commits release via flag (no config file needed)
+The gate passes only if the heading is dated and has notes, the version is not released yet, and a release
+candidate exists for exactly the commit being released. See the
+[release flows](https://labs.layer87.de/docs/relctl/release-flows).
 
-```bash
-relctl release create --version-scheme conventional-commits --dry-run
-# Would create new release with version: 1.3.0
-```
+## Configuration: `.relctl.yaml`
 
-### CalVer release via config file
+Optional. Place it in the repository root. Every key is optional:
 
 ```yaml
-# .relctl.yaml
-version_scheme: calver
+# how the version is calculated: semver (default) | conventional-commits | calver | changelog
+version_scheme: semver
+
+# changelog scheme: the file with the "## X.Y.Z — YYYY-MM-DD" headings (default CHANGELOG.md)
+changelog_file: CHANGELOG.md
+
+# branches for `relctl release forward`
+production_branch: main      # receives the releases (default: main)
+development_branch: dev      # default: the default branch of the repository
 ```
 
-```bash
-# No branch prefix or PR context required
-relctl release create
-# → e.g. 2026.06.01.1
+`default_branch` is the former name of `production_branch` and is still read.
 
-relctl release publish --release-id "$RELCTL_RELEASE_ID" --asset "file=dist/binary"
-```
+**Priority**: command-line flag > `.relctl.yaml` > built-in default.
 
-### CalVer release via flag (no config file needed)
+## Commands
 
-```bash
-relctl release create --version-scheme calver
-# → e.g. 2026.06.01.1
+| Command | What it does |
+| --- | --- |
+| `relctl release create` | compute the version and create a draft release (`--prerelease` for a release candidate, `--dry-run` to preview) |
+| `relctl release publish` | publish a draft release and upload assets (`--asset "file=…"`, `zip=`, `tgz=`) |
+| `relctl release gate` | check that the changelog may be released (see flow 3) |
+| `relctl release forward` | bring the production branch back into the development branch (fast-forward or pull request) |
+| `relctl pr info` | version a pull request would produce |
+| `relctl parse json\|yaml\|version` | read values from JSON, YAML or version strings |
+| `relctl transform group-by` | group a JSON list by a key |
+| `relctl connect github` | persist an encrypted connection (for pipelines without a detectable runner) |
 
-# Second release on the same day (git tag 2026.06.01.1 already exists)
-relctl release create --version-scheme calver
-# → 2026.06.01.2
-```
+Variables are exported to the pipeline (GitHub Actions: `$GITHUB_ENV` and step outputs):
+`RELCTL_VERSION`, `RELCTL_NEXT_VERSION`, `RELCTL_RELEASE_ID`, `RELCTL_LATEST_VERSION`, `RELCTL_PR`, …
+`RELCTL_SILENT=true` switches the help comment on pull requests off.
 
-### Dry-run (preview version without creating a release)
+## Version schemes
 
-```bash
-relctl release create --version-scheme calver --dry-run
-# Would create new release with version: 2026.06.01.1
-```
+- **semver** (default): the bump comes from the branch prefix of the merged pull request (table above).
+- **conventional-commits**: the bump comes from the commit messages since the last published release.
+  `feat!:` or a `BREAKING CHANGE:` footer is major, `feat` is minor, `fix` and other types are patch.
+  Squash-merged history only; the repository needs full history (`fetch-depth: 0`).
+- **calver**: `YYYYMM.D.N` (for example `202611.2.1`): year and month, day of the month, and the number of the
+  release that day. Calculated from local git tags, needs `fetch-depth: 0`.
+- **changelog**: the topmost `## X.Y.Z — YYYY-MM-DD` heading of the changelog. Strict format: no `v`, no
+  suffix, a real date. An undated heading is not released, and the release is idempotent.
 
-### GitHub Actions example
+## Installation
 
-```yaml
-- uses: actions/checkout@v4
-  with:
-    fetch-depth: 0   # required: full tag history for N calculation
+- **GitHub Actions** (recommended): [`layer87-labs/relctl-action`](https://github.com/layer87-labs/relctl-action)
+  installs a verified binary.
+- **Manually**: download `relctl_<version>_<os>-<arch>` and `sha256sum.txt` from the
+  [latest release](https://github.com/layer87-labs/relctl/releases/latest), verify the checksum and add the
+  binary to your `PATH`.
 
-- name: Create CalVer release
-  run: relctl release create --version-scheme calver
-  env:
-    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
+## Documentation
 
-## Examples
+Full documentation, including a migration guide from awesome-ci and a runbook an AI agent can follow to migrate
+a repository: **https://labs.layer87.de/docs/relctl/intro**
 
-More examples are available in the [examples section](https://layer87-labs.github.io/relctl/docs/examples)
-of the documentation.
+## Getting help
 
-## Frequently Asked Questions
-
-See the [Q&A section](https://layer87-labs.github.io/relctl/docs/questions_and_answers).
-
-## Getting Help
-
-Please file an issue in this repository's [Issue Tracker](https://github.com/layer87-labs/relctl/issues).
+Please file an issue in this repository's [issue tracker](https://github.com/layer87-labs/relctl/issues).
 
 ## Community
 
@@ -195,5 +184,6 @@ relctl is licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE)
 
 - [SemVer](https://semver.org/)
 - [CalVer](https://calver.org/)
+- [Conventional Commits](https://www.conventionalcommits.org/)
 - [Cobra CLI](https://github.com/spf13/cobra)
 - [go-git](https://github.com/go-git/go-git)
