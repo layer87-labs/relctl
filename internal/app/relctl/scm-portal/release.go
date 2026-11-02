@@ -65,3 +65,8 @@ func (lay SCMLayer) PublishRelease(tagName string, releasePrefix string, branch 
 	return nil, nil
 
 }
+
+// TagExists reports whether the given tag exists in the repository.
+func (lay SCMLayer) TagExists(tag string) (bool, error) {
+	return lay.Grc.(*github.GitHubRichClient).TagExists(tag)
+}

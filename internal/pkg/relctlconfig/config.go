@@ -11,6 +11,8 @@ const (
 	SchemeCalVer              = "calver"
 	SchemeSemVer              = "semver"
 	SchemeConventionalCommits = "conventional-commits"
+	SchemeChangelog           = "changelog"
+	DefaultChangelogFile      = "CHANGELOG.md"
 	DefaultVersionScheme      = SchemeSemVer
 	DefaultBranch             = "main"
 )
@@ -18,8 +20,11 @@ const (
 // Config holds the contents of a .relctl.yaml project config file.
 // All fields are optional – missing values fall back to their defaults.
 type Config struct {
-	// VersionScheme selects the versioning strategy: "semver" (default) or "calver".
+	// VersionScheme selects the versioning strategy: "semver" (default), "calver",
+	// "conventional-commits" or "changelog".
 	VersionScheme string `yaml:"version_scheme"`
+	// ChangelogFile is the changelog read by the "changelog" scheme (default CHANGELOG.md).
+	ChangelogFile string `yaml:"changelog_file"`
 	// DefaultBranch is the repository's main integration branch.
 	DefaultBranch string `yaml:"default_branch"`
 }
@@ -51,6 +56,7 @@ func defaults() *Config {
 	return &Config{
 		VersionScheme: DefaultVersionScheme,
 		DefaultBranch: DefaultBranch,
+		ChangelogFile: DefaultChangelogFile,
 	}
 }
 
@@ -59,6 +65,9 @@ func defaults() *Config {
 func applyDefaults(cfg *Config) {
 	if cfg.VersionScheme == "" {
 		cfg.VersionScheme = DefaultVersionScheme
+	}
+	if cfg.ChangelogFile == "" {
+		cfg.ChangelogFile = DefaultChangelogFile
 	}
 	if cfg.DefaultBranch == "" {
 		cfg.DefaultBranch = DefaultBranch

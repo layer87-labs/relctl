@@ -250,3 +250,15 @@ func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseM
 
 	return nil, errors.New("could not find latest release")
 }
+
+// TagExists reports whether the given tag exists in the repository.
+func (ghrc *GitHubRichClient) TagExists(tag string) (bool, error) {
+	_, resp, err := ghrc.Client.Git.GetRef(ctx, ghrc.Owner, ghrc.Repository, "tags/"+tag)
+	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			return false, nil
+		}
+		return false, fmt.Errorf("error at checking tag %q: %v", tag, err)
+	}
+	return true, nil
+}

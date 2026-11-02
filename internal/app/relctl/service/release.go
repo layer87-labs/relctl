@@ -51,6 +51,28 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Fatalln(err)
 	}
 
+	if scheme, schemeErr := resolveVersionScheme(args); schemeErr == nil && scheme == relctlconfig.SchemeChangelog {
+		if body == "" {
+			if _, notes, notesErr := changelogReleaseFromFile(args); notesErr == nil {
+				body = notes
+			}
+		}
+		// Idempotent: a version that is already tagged is not released again.
+		if exists, tagErr := scmLayer.TagExists(version); tagErr != nil {
+			log.Fatalln(tagErr)
+		} else if exists {
+			log.Infof("tag %s already exists, nothing to release", version)
+			fmt.Printf("Tag %s already exists, nothing to release\n", version)
+			if err := scmLayer.CES.ExportAsEnv([]ces.KeyValue{
+				{Name: "RELCTL_VERSION", Value: version},
+				{Name: "RELCTL_NEXT_VERSION", Value: version},
+			}); err != nil {
+				log.Fatalf("could not export env variables: %v", err)
+			}
+			return
+		}
+	}
+
 	if args.DryRun {
 		log.Infof("Would create new release with version: %s\n", version)
 
@@ -201,6 +223,16 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 		return version, releasePrefix, err
 	}
 	// --- end Conventional Commits path ---
+
+	// --- Changelog path ---
+	if scheme == relctlconfig.SchemeChangelog {
+		if args.Version != "" {
+			return args.Version, releasePrefix, nil
+		}
+		version, _, err = changelogReleaseFromFile(args)
+		return version, releasePrefix, err
+	}
+	// --- end Changelog path ---
 
 	if args.Version != "" && args.PatchLevel != "" {
 		parsedPatchLevel, err := semver.ParsePatchLevel(args.PatchLevel)
