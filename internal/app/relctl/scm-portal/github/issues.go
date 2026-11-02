@@ -130,17 +130,19 @@ func (ghrc *GitHubRichClient) SearchIssuesForOverrides(prNumber int) (nextVersio
 
 		// if isCollaborator {
 		if true {
-			aciVersionOverride := regexp.MustCompile(`^relctl_version_override: (` + semVerRegex + `)`)
-			aciPatchLevel := regexp.MustCompile(`^relctl_patch_level: ([a-zA-Z]+)`)
+			// The legacy awesome-ci prefix "aci_" is still accepted.
+			if strings.HasPrefix(*comment.Body, "aci_") {
+				logrus.Warnln("the comment command prefix 'aci_' is deprecated, please use 'relctl_'")
+			}
 
-			if aciVersionOverride.MatchString(*comment.Body) {
-				nextVersion = &aciVersionOverride.FindStringSubmatch(*comment.Body)[1]
+			if v := matchVersionOverride(*comment.Body); v != nil {
+				nextVersion = v
 				logrus.Infof("found version override in comment form %s at %s", comment.User.GetLogin(), comment.GetCreatedAt())
 				break
 			}
 
-			if aciPatchLevel.MatchString(*comment.Body) {
-				pLevel, err = semver.ParsePatchLevel(aciPatchLevel.FindStringSubmatch(*comment.Body)[1])
+			if level := matchPatchLevel(*comment.Body); level != "" {
+				pLevel, err = semver.ParsePatchLevel(level)
 				if err != nil && err != semver.ErrUseMinimalPatchVersion {
 					logrus.Warnln(err)
 				}
@@ -157,3 +159,28 @@ func (ghrc *GitHubRichClient) SearchIssuesForOverrides(prNumber int) (nextVersio
 	_, _, err = ghrc.Client.Issues.CreateComment(ctx, ghrc.Owner, ghrc.Repository, number, comment)
 	return
 } */
+
+var (
+	versionOverrideRe = regexp.MustCompile(`^(?:relctl|aci)_version_override: (` + semVerRegex + `)`)
+	patchLevelRe      = regexp.MustCompile(`^(?:relctl|aci)_patch_level: ([a-zA-Z]+)`)
+)
+
+// matchVersionOverride returns the version of a "relctl_version_override:" (or
+// legacy "aci_version_override:") command at the start of body, or nil.
+func matchVersionOverride(body string) *string {
+	m := versionOverrideRe.FindStringSubmatch(body)
+	if m == nil {
+		return nil
+	}
+	return &m[1]
+}
+
+// matchPatchLevel returns the argument of a "relctl_patch_level:" (or legacy
+// "aci_patch_level:") command at the start of body, or "".
+func matchPatchLevel(body string) string {
+	m := patchLevelRe.FindStringSubmatch(body)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
