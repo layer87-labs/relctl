@@ -58,6 +58,32 @@ pull request that releases.
 	},
 }
 
+var forwardArgs service.ForwardArgs
+
+var forwardCmd = &cobra.Command{
+	Use:   "forward",
+	Short: "Bring the production branch back into the development branch after a release",
+	Long: `Bring the released state of the production branch back into the development branch.
+
+The branches come from .relctl.yaml (production_branch, default "main", and
+development_branch, default: the default branch of the repository) or from the
+flags --from and --to.
+
+relctl fast-forwards the development branch if that is possible. If the
+development branch has moved on, or the token may not push to it (branch rules),
+relctl opens a pull request instead. Merge that pull request with a merge commit,
+do not squash it. The command is idempotent: nothing happens if the development
+branch already contains the production branch or if the pull request is open.
+
+    relctl release forward
+    relctl release forward --from main --to dev --dry-run`,
+	Run: func(cmd *cobra.Command, args []string) {
+		forwardArgs.ConfigFile = releaseArgs.ConfigFile // persistent --config flag
+		forwardArgs.DryRun = releaseArgs.DryRun         // persistent --dry-run flag
+		service.ReleaseForward(&forwardArgs)
+	},
+}
+
 var publishCmd = &cobra.Command{
 	Use:   "publish",
 	Short: "Publish a recently created GitHub release",
@@ -126,6 +152,7 @@ func init() {
 	Cmd.AddCommand(createCmd)
 	Cmd.AddCommand(publishCmd)
 	Cmd.AddCommand(gateCmd)
+	Cmd.AddCommand(forwardCmd)
 
 	// Flags
 	Cmd.PersistentFlags().IntVar(&releaseArgs.PrNumber, "prnumber", 0, "overwrite the issue number")
@@ -143,6 +170,9 @@ func init() {
 
 	gateCmd.Flags().StringVar(&gateArgs.Sha, "sha", "", "commit that must have a release candidate (default: HEAD)")
 	gateCmd.Flags().BoolVar(&gateArgs.RequireCandidate, "require-candidate", true, "require a release candidate tag for the commit")
+
+	forwardCmd.Flags().StringVar(&forwardArgs.From, "from", "", "production branch (default: production_branch of .relctl.yaml, or main)")
+	forwardCmd.Flags().StringVar(&forwardArgs.To, "to", "", "development branch (default: development_branch of .relctl.yaml, or the repository's default branch)")
 
 	// exclusive Flags
 	publishCmd.Flags().Int64VarP(&releaseID, "release-id", "", 0, "publish an early defined release (also looking for env RELCTL_RELEASE_ID)")
