@@ -48,3 +48,16 @@ func TestLoad_EmptyFile_UsesDefaults(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, relctlconfig.SchemeSemVer, cfg.VersionScheme)
 }
+
+func TestChangelogFileDefault(t *testing.T) {
+	cfg, err := relctlconfig.Load(filepath.Join(t.TempDir(), "missing.yaml"))
+	require.NoError(t, err)
+	require.Equal(t, "CHANGELOG.md", cfg.ChangelogFile)
+
+	p := filepath.Join(t.TempDir(), ".relctl.yaml")
+	require.NoError(t, os.WriteFile(p, []byte("version_scheme: changelog\nchangelog_file: docs/CHANGES.md\n"), 0o600))
+	cfg, err = relctlconfig.Load(p)
+	require.NoError(t, err)
+	require.Equal(t, relctlconfig.SchemeChangelog, cfg.VersionScheme)
+	require.Equal(t, "docs/CHANGES.md", cfg.ChangelogFile)
+}

@@ -250,3 +250,33 @@ func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseM
 
 	return nil, errors.New("could not find latest release")
 }
+
+// TagExists reports whether the given tag exists in the repository.
+func (ghrc *GitHubRichClient) TagExists(tag string) (bool, error) {
+	_, resp, err := ghrc.Client.Git.GetRef(ctx, ghrc.Owner, ghrc.Repository, "tags/"+tag)
+	if err != nil {
+		if resp != nil && resp.StatusCode == 404 {
+			return false, nil
+		}
+		return false, fmt.Errorf("error at checking tag %q: %v", tag, err)
+	}
+	return true, nil
+}
+
+// FindReleaseByTag returns the release (draft or published) for the given tag
+// name, or nil if there is none.
+func (ghrc *GitHubRichClient) FindReleaseByTag(tag string) (*github.RepositoryRelease, error) {
+	for page := 1; page != 0; {
+		releases, resp, err := ghrc.Client.Repositories.ListReleases(ctx, ghrc.Owner, ghrc.Repository, &github.ListOptions{PerPage: 100, Page: page})
+		if err != nil {
+			return nil, fmt.Errorf("error at listing releases: %v", err)
+		}
+		for _, r := range releases {
+			if r.GetTagName() == tag {
+				return r, nil
+			}
+		}
+		page = resp.NextPage
+	}
+	return nil, nil
+}
