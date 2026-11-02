@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/go-github/v86/github"
 	"github.com/sirupsen/logrus"
@@ -21,9 +22,21 @@ func (ghrc *GitHubRichClient) GetPrInfos(prNumber int, mergeCommitSha string) (p
 	} else if mergeCommitSha != "" {
 
 		logrus.Infof("looking up pull requests associated with merge commit %s", mergeCommitSha)
-		pullRequests, _, err := ghrc.Client.PullRequests.ListPullRequestsWithCommit(ctx, ghrc.Owner, ghrc.Repository, mergeCommitSha, &github.ListOptions{PerPage: 100})
-		if err != nil {
-			return nil, fmt.Errorf("could not load pull requests for merge commit %s: %v", mergeCommitSha, err)
+		// GitHub indexes the commit-to-PR association asynchronously, so the
+		// list can be empty right after a merge. Retry a few times.
+		var pullRequests []*github.PullRequest
+		for attempt := 1; attempt <= 4; attempt++ {
+			pullRequests, _, err = ghrc.Client.PullRequests.ListPullRequestsWithCommit(ctx, ghrc.Owner, ghrc.Repository, mergeCommitSha, &github.ListOptions{PerPage: 100})
+			if err != nil {
+				return nil, fmt.Errorf("could not load pull requests for merge commit %s: %v", mergeCommitSha, err)
+			}
+			if len(pullRequests) > 0 {
+				break
+			}
+			if attempt < 4 {
+				logrus.Infof("no pull request listed for %s yet, retrying (%d/3)", mergeCommitSha, attempt)
+				time.Sleep(time.Duration(attempt) * 2 * time.Second)
+			}
 		}
 
 		prInfos = pickPullRequest(pullRequests, mergeCommitSha)
@@ -48,9 +61,15 @@ func (ghrc *GitHubRichClient) GetPrInfos(prNumber int, mergeCommitSha string) (p
 // It returns nil if there is no merged candidate.
 func pickPullRequest(candidates []*github.PullRequest, sha string) *github.PullRequest {
 	var best, bestExact *github.PullRequest
+	// newer orders by merge time; equal times (a PR that GitHub marked as merged
+	// together with another one) are decided by the lower pull request number,
+	// so the result does not depend on the order of the API response.
 	newer := func(a, b *github.PullRequest) bool {
 		if b == nil {
 			return true
+		}
+		if a.GetMergedAt().Time.Equal(b.GetMergedAt().Time) {
+			return a.GetNumber() < b.GetNumber()
 		}
 		return a.GetMergedAt().After(b.GetMergedAt().Time)
 	}

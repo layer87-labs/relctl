@@ -35,6 +35,12 @@ func TestPickPullRequest(t *testing.T) {
 		got := pickPullRequest([]*github.PullRequest{pr(1, "abc", &t0), pr(2, "zzz", &t2)}, "abc")
 		require.Equal(t, 1, got.GetNumber())
 	})
+	t.Run("equal merge time is decided by lower number, independent of order", func(t *testing.T) {
+		a := pickPullRequest([]*github.PullRequest{pr(7, "abc", &t0), pr(5, "abc", &t0)}, "abc")
+		b := pickPullRequest([]*github.PullRequest{pr(5, "abc", &t0), pr(7, "abc", &t0)}, "abc")
+		require.Equal(t, 5, a.GetNumber())
+		require.Equal(t, 5, b.GetNumber())
+	})
 	t.Run("falls back to newest merged", func(t *testing.T) {
 		got := pickPullRequest([]*github.PullRequest{pr(1, "x", &t0), pr(2, "y", &t1)}, "abc")
 		require.Equal(t, 2, got.GetNumber())
