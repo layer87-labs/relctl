@@ -25,7 +25,13 @@ type Config struct {
 	VersionScheme string `yaml:"version_scheme"`
 	// ChangelogFile is the changelog read by the "changelog" scheme (default CHANGELOG.md).
 	ChangelogFile string `yaml:"changelog_file"`
-	// DefaultBranch is the repository's main integration branch.
+	// ProductionBranch is the branch that receives releases (default "main").
+	ProductionBranch string `yaml:"production_branch"`
+	// DevelopmentBranch is the branch work lands on before it is released. Empty
+	// means the default branch of the repository. Used by `release forward`.
+	DevelopmentBranch string `yaml:"development_branch"`
+	// DefaultBranch is the former name of ProductionBranch. It is still read and
+	// used as ProductionBranch if that is not set.
 	DefaultBranch string `yaml:"default_branch"`
 }
 
@@ -37,6 +43,7 @@ func Load(path string) (*Config, error) {
 
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
+		applyDefaults(cfg)
 		return cfg, nil
 	}
 	if err != nil {
@@ -55,7 +62,6 @@ func Load(path string) (*Config, error) {
 func defaults() *Config {
 	return &Config{
 		VersionScheme: DefaultVersionScheme,
-		DefaultBranch: DefaultBranch,
 		ChangelogFile: DefaultChangelogFile,
 	}
 }
@@ -69,7 +75,13 @@ func applyDefaults(cfg *Config) {
 	if cfg.ChangelogFile == "" {
 		cfg.ChangelogFile = DefaultChangelogFile
 	}
+	if cfg.ProductionBranch == "" {
+		cfg.ProductionBranch = cfg.DefaultBranch
+	}
+	if cfg.ProductionBranch == "" {
+		cfg.ProductionBranch = DefaultBranch
+	}
 	if cfg.DefaultBranch == "" {
-		cfg.DefaultBranch = DefaultBranch
+		cfg.DefaultBranch = cfg.ProductionBranch
 	}
 }
