@@ -68,7 +68,8 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string) (infos *PrMrRe
 		log.Traceln("no version override found")
 		// Get the latest release, if any
 		log.Traceln("get latest release, if any")
-		repositoryRelease, err := lay.GetLatestReleaseVersion()
+		// Prereleases (release candidates) are never the base of a bump.
+		repositoryRelease, err := lay.GetLatestPublishedRelease()
 		if err != nil {
 			log.Infoln("no github release found -> writing default 0.0.0")
 			infos.LatestVersion = "0.0.0"

@@ -77,3 +77,22 @@ func changelogReleaseFromFile(args *ReleaseArgs) (version, notes string, err err
 	}
 	return changelogRelease(string(data))
 }
+
+// changelogHeadingVersionFromFile returns the version of the topmost heading,
+// dated or not. It is used for release candidates, which are built from a
+// heading that has not been dated yet.
+func changelogHeadingVersionFromFile(args *ReleaseArgs) (string, error) {
+	path, err := changelogFileFor(args)
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("changelog: %w", err)
+	}
+	h, err := changelog.Top(string(data))
+	if err != nil {
+		return "", err
+	}
+	return h.Version, nil
+}

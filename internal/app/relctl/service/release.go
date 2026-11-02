@@ -9,6 +9,7 @@ import (
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
 	"github.com/layer87-labs/relctl/internal/pkg/conventionalcommits"
+	"github.com/layer87-labs/relctl/internal/pkg/prerelease"
 	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 	"github.com/layer87-labs/relctl/internal/pkg/tools"
@@ -33,6 +34,9 @@ type ReleaseArgs struct {
 	VersionScheme string
 	// ConfigFile is the path to .relctl.yaml; empty means default lookup.
 	ConfigFile string
+	// Prerelease creates a release candidate (X.Y.Z-rc.N, marked as prerelease)
+	// for the computed version instead of the release itself.
+	Prerelease bool
 }
 
 func ReleaseCreate(args *ReleaseArgs) {
@@ -51,18 +55,34 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Fatalln(err)
 	}
 
+	base := version
+	if args.Prerelease {
+		// A candidate for a version that is already released can never be released.
+		if released := versionAlreadyReleased(scmLayer, base); released {
+			log.Infof("%s is already released, no release candidate is created", base)
+			fmt.Printf("%s is already released, no release candidate is created\n", base)
+			return
+		}
+		version, err = nextReleaseCandidate(scmLayer.ListTagAndReleaseNames, base)
+		if err != nil {
+			log.Fatalln(err)
+		}
+	}
+
 	if isChangelogScheme(args) {
 		if body == "" {
-			notes, notesErr := changelogNotes(args, version)
+			notes, notesErr := changelogNotes(args, base)
 			if notesErr != nil {
 				log.Fatalln(notesErr)
 			}
 			body = notes
 		}
 		// Idempotent: a version that already has a release (draft or published)
-		// or a tag is not released again.
-		if done := changelogAlreadyReleased(scmLayer, version); done {
-			return
+		// or a tag is not released again. Candidates get a new number every time.
+		if !args.Prerelease {
+			if done := changelogAlreadyReleased(scmLayer, version); done {
+				return
+			}
 		}
 	}
 
@@ -85,7 +105,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Println("### Info output:")
 		fmt.Printf("Writing new release with version: %s\n", version)
 
-		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, args.ReleaseBranch, body)
+		createdRelease, err := scmLayer.CreateRelease(version, releasePrefix, args.ReleaseBranch, body, args.Prerelease)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -241,6 +261,11 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 		if args.Version != "" {
 			return args.Version, releasePrefix, nil
 		}
+		if args.Prerelease {
+			// A candidate may be built from a heading that is not dated yet.
+			version, err = changelogHeadingVersionFromFile(args)
+			return version, releasePrefix, err
+		}
 		version, _, err = changelogReleaseFromFile(args)
 		return version, releasePrefix, err
 	}
@@ -260,7 +285,7 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 		version = args.Version
 
 	} else if args.Hotfix {
-		release, err := scmLayer.GetLatestReleaseVersion()
+		release, err := scmLayer.GetLatestPublishedRelease()
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -373,4 +398,30 @@ func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool
 		return true
 	}
 	return false
+}
+
+// nextReleaseCandidate returns the version of the next release candidate of
+// base (base-rc.N), numbered after the existing tags and releases.
+func nextReleaseCandidate(list func(prefix string) ([]string, error), base string) (string, error) {
+	existing, err := list(prerelease.Prefix(base))
+	if err != nil {
+		return "", fmt.Errorf("release candidate: listing existing candidates: %w", err)
+	}
+	return prerelease.Tag(base, prerelease.Next(base, existing)), nil
+}
+
+// versionAlreadyReleased reports whether a published release or a tag exists for version.
+func versionAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool {
+	existing, draft, err := scmLayer.FindReleaseByTag(version)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	if existing != nil && !draft {
+		return true
+	}
+	tagExists, err := scmLayer.TagExists(version)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	return tagExists
 }
