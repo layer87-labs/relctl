@@ -20,9 +20,14 @@ func DetectCes() (cesType CES,
 	err error) {
 
 	rcFile := rcpersist.NewRcInstance()
-	envFile := "awesomeci.env"
+	envFile := "relctl.env"
 
 	if creds, errRc := rcFile.Load(); errRc == nil {
+		token, errToken := rcFile.PlainToken()
+		if errToken != nil {
+			err = errToken
+			return
+		}
 		cesType = CES{
 			Type:    rcpersist.CESTypeLoMa,
 			EnvFile: envFile,
@@ -31,7 +36,7 @@ func DetectCes() (cesType CES,
 		connCreds = &models.ConnectCredentials{
 			ServerURL:  creds.ServerURL,
 			Repository: creds.Repository,
-			Token:      *creds.TokenPlain,
+			Token:      token,
 		}
 		return
 	}
