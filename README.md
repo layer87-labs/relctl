@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/lockup-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="assets/lockup-light.svg">
+    <img alt="relctl" src="assets/lockup-light.svg" width="360">
+  </picture>
+</p>
+
 [![Go Report Card](https://goreportcard.com/badge/github.com/layer87-labs/relctl)](https://goreportcard.com/report/github.com/layer87-labs/relctl)
 [![GitHub release](https://img.shields.io/github/release/layer87-labs/relctl.svg)](https://github.com/layer87-labs/relctl/releases/latest)
 [![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/layer87-labs/relctl.svg)](https://github.com/layer87-labs/relctl)
