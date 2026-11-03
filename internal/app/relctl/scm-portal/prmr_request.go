@@ -2,6 +2,7 @@ package scmportal
 
 import (
 	"github.com/layer87-labs/relctl/internal/app/relctl/scm-portal/github"
+	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 
 	log "github.com/sirupsen/logrus"
@@ -16,7 +17,7 @@ import (
 // comments. If no version override is found, it determines the latest version
 // and calculates the next version based on the patch level.
 
-func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string) (infos *PrMrRequestInfos, err error) {
+func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string) (infos *PrMrRequestInfos, err error) {
 	// Initialize the standard information
 	infos = &PrMrRequestInfos{}
 
@@ -30,26 +31,39 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string) (infos *PrMrRe
 	}
 	log.Traceln("got PR information from scm-portal-layer")
 
-	infos.Number = *prInfos.Number
-	infos.Sha = *prInfos.Head.SHA
-	infos.ShaShort = infos.Sha[:8]
-	infos.BranchName = *prInfos.Head.Ref
+	// GitHub computes the merge commit of an open pull request asynchronously; right after
+	// the pull request was created it can be missing. That is not an error.
+	infos.Number = prInfos.GetNumber()
+	infos.Sha = prInfos.GetHead().GetSHA()
+	infos.ShaShort = shortSha(infos.Sha)
+	infos.BranchName = prInfos.GetHead().GetRef()
 	infos.Owner = grc.Owner
 	infos.Repo = grc.Repository
-	infos.MergeCommitSha = *prInfos.MergeCommitSHA
+	infos.MergeCommitSha = prInfos.GetMergeCommitSHA()
+
+	// Comment help instructions to the issue. What a pull request can influence
+	// depends on the version scheme.
+	log.Traceln("comment help instructions to issue")
+	if errCommHelp := lay.CommentHelpToPullRequest(infos.Number, scheme); errCommHelp != nil {
+		log.Warnln(errCommHelp)
+	}
+	log.Traceln("commented help instructions to issue")
+
+	// Only SemVer reads the branch prefix and the comment commands. For every
+	// other scheme the caller computes the version; the latest release is
+	// reported for reference.
+	if scheme != relctlconfig.SchemeSemVer && scheme != "" {
+		if repositoryRelease, errLatest := lay.GetLatestPublishedRelease(); errLatest == nil {
+			infos.LatestVersion = repositoryRelease.TagName
+		}
+		return infos, nil
+	}
 
 	// Parse the patch level from the branch name
 	if infos.PatchLevel, err = semver.ParsePatchLevelFormBranch(infos.BranchName); err != nil {
 		log.Warnln(err)
 	}
 	log.Traceln("completed PR standard information to: ", *infos)
-
-	// Comment help instructions to the issue
-	log.Traceln("comment help instructions to issue")
-	if errCommHelp := lay.CommentHelpToPullRequest(infos.Number); errCommHelp != nil {
-		log.Warnln(errCommHelp)
-	}
-	log.Traceln("commented help instructions to issue")
 
 	// Read comments from the pull request or merge request
 	// and look for overrides
@@ -95,4 +109,12 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string) (infos *PrMrRe
 	}
 
 	return
+}
+
+// shortSha returns the first eight characters of a commit sha.
+func shortSha(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
 }
