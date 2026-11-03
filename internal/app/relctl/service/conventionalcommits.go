@@ -57,7 +57,7 @@ func conventionalCommitsVersion(rl latestPublishedReleaseGetter, commitMessagesS
 		return "", err
 	}
 
-	return semver.IncreaseVersion(patchLevel, latest.TagName)
+	return semver.IncreaseVersion(patchLevel, latest.BaseVersion())
 }
 
 // bumpToPatchLevel maps a conventionalcommits.Bump to the semver.PatchLevel

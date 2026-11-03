@@ -54,7 +54,34 @@ pull request that releases.
     relctl release gate --require-candidate=false`,
 	Run: func(cmd *cobra.Command, args []string) {
 		gateArgs.ConfigFile = releaseArgs.ConfigFile // persistent --config flag
+		gateArgs.Component = releaseArgs.Component   // persistent --component flag
 		service.ReleaseGate(&gateArgs)
+	},
+}
+
+var changedArgs service.ChangedArgs
+
+var changedCmd = &cobra.Command{
+	Use:   "changed",
+	Short: "Report whether a component changed since its latest release",
+	Long: `Report whether a file that belongs to a component changed since the component's
+latest release.
+
+The paths of a component are listed under components.<name>.paths in .relctl.yaml
+(glob patterns; "**" matches any number of directories). The latest release is the
+highest release tag of the component that is reachable from HEAD; release candidates
+do not count. A component without a release counts as changed.
+
+The command needs the full history and the tags (fetch-depth: 0) and no access to
+GitHub. It exports RELCTL_CHANGED (true or false), RELCTL_CHANGED_FILES,
+RELCTL_COMPONENT and RELCTL_LATEST_VERSION, so a pipeline builds only what changed:
+
+    relctl release changed --component whisper
+    relctl release changed --component whisper --since 202611.2.4`,
+	Run: func(cmd *cobra.Command, args []string) {
+		changedArgs.ConfigFile = releaseArgs.ConfigFile // persistent --config flag
+		changedArgs.Component = releaseArgs.Component   // persistent --component flag
+		service.ReleaseChanged(&changedArgs)
 	},
 }
 
@@ -109,7 +136,6 @@ To publish a release with a specific release ID and assets, use the following co
     relctl release publish --release-id 12345 \
         --asset "file=out/relctl_v1.0.0_amd64" \
         --asset "file=out/relctl_v1.0.0_arm64"
-	relctl release publish --release-id 12345 --asset "file=out/relctl_v1.0.0_amd64" --asset "file=out/relctl_v1.0.0_arm64"
 
 If the release ID is not provided, the command will look for the 'RELCTL_RELEASE_ID' environment variable:
 
@@ -117,8 +143,6 @@ If the release ID is not provided, the command will look for the 'RELCTL_RELEASE
     relctl release publish \
         --asset "file=out/relctl_v1.0.0_amd64" \
         --asset "file=out/relctl_v1.0.0_arm64"
-	export RELCTL_RELEASE_ID=12345
-	relctl release publish --asset "file=out/relctl_v1.0.0_amd64" --asset "file=out/relctl_v1.0.0_arm64"
 
 You can also publish a release with a directory as a zip asset:
 
@@ -153,6 +177,7 @@ func init() {
 	Cmd.AddCommand(publishCmd)
 	Cmd.AddCommand(gateCmd)
 	Cmd.AddCommand(forwardCmd)
+	Cmd.AddCommand(changedCmd)
 
 	// Flags
 	Cmd.PersistentFlags().IntVar(&releaseArgs.PrNumber, "prnumber", 0, "overwrite the issue number")
@@ -167,6 +192,9 @@ func init() {
 	Cmd.PersistentFlags().StringVar(&releaseArgs.VersionScheme, "version-scheme", "", "versioning scheme to use: semver (default), calver, conventional-commits or changelog (overrides .relctl.yaml)")
 	Cmd.PersistentFlags().BoolVar(&releaseArgs.Prerelease, "prerelease", false, "create a release candidate (X.Y.Z-rc.N, marked as prerelease) for the computed version")
 	Cmd.PersistentFlags().StringVar(&releaseArgs.ConfigFile, "config", "", "path to .relctl.yaml config file")
+	Cmd.PersistentFlags().StringVar(&releaseArgs.Component, "component", "", "release one component of the repository (key components in .relctl.yaml): own tags, own latest release, own counter")
+
+	changedCmd.Flags().StringVar(&changedArgs.Since, "since", "", "compare with this commit or tag instead of the latest release of the component")
 
 	gateCmd.Flags().StringVar(&gateArgs.Sha, "sha", "", "commit that must have a release candidate (default: HEAD)")
 	gateCmd.Flags().BoolVar(&gateArgs.RequireCandidate, "require-candidate", true, "require a release candidate tag for the commit")

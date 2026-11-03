@@ -192,8 +192,8 @@ func (ghrc *GitHubRichClient) relinkAssets(releaseID int64, text string, uploade
 // Returns:
 // - latestRelease: a pointer to the latest non-draft release.
 // - err: an error if any occurred during the process.
-func (ghrc *GitHubRichClient) GetLatestReleaseVersion() (latestRelease *github.RepositoryRelease, err error) {
-	return ghrc.getLatestRelease(false)
+func (ghrc *GitHubRichClient) GetLatestReleaseVersion(tagPrefix string) (latestRelease *github.RepositoryRelease, err error) {
+	return ghrc.getLatestRelease(false, tagPrefix)
 }
 
 // GetLatestPublishedRelease retrieves the latest *published* release from
@@ -203,13 +203,13 @@ func (ghrc *GitHubRichClient) GetLatestReleaseVersion() (latestRelease *github.R
 // because some callers — e.g. the conventional-commits version scheme —
 // need a strictly "this is what users are running" reference point, where
 // a prerelease would give a misleading base version to bump from.
-func (ghrc *GitHubRichClient) GetLatestPublishedRelease() (latestRelease *github.RepositoryRelease, err error) {
-	return ghrc.getLatestRelease(true)
+func (ghrc *GitHubRichClient) GetLatestPublishedRelease(tagPrefix string) (latestRelease *github.RepositoryRelease, err error) {
+	return ghrc.getLatestRelease(true, tagPrefix)
 }
 
 // getLatestRelease retrieves the latest release, always excluding drafts and
 // additionally excluding prereleases when excludePrerelease is true.
-func (ghrc *GitHubRichClient) getLatestRelease(excludePrerelease bool) (latestRelease *github.RepositoryRelease, err error) {
+func (ghrc *GitHubRichClient) getLatestRelease(excludePrerelease bool, tagPrefix string) (latestRelease *github.RepositoryRelease, err error) {
 	var releaseMap = make(map[string]*github.RepositoryRelease)
 	var loadReleasesFromRepo func(page int)
 
@@ -248,7 +248,7 @@ func (ghrc *GitHubRichClient) getLatestRelease(excludePrerelease bool) (latestRe
 	// starting recusive function
 	loadReleasesFromRepo(1)
 
-	return ghrc.findLatestRelease(`.`, releaseMap)
+	return ghrc.findLatestRelease(`.`, releaseMap, tagPrefix)
 }
 
 // findLatestRelease finds the latest release in the given directory based on the tags in the local git repository.
@@ -260,7 +260,7 @@ func (ghrc *GitHubRichClient) getLatestRelease(excludePrerelease bool) (latestRe
 // Returns:
 // - latestRelease: the latest release found in the directory, or nil if no release is found.
 // - err: an error if any occurred during the process.
-func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseMap map[string]*github.RepositoryRelease) (latestRelease *github.RepositoryRelease, err error) {
+func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseMap map[string]*github.RepositoryRelease, tagPrefix string) (latestRelease *github.RepositoryRelease, err error) {
 	logrus.Traceln("open local git repository...")
 	gitRepo, err := git.PlainOpen(directory)
 	if err != nil {
@@ -268,7 +268,7 @@ func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseM
 	}
 	logrus.Traceln("...opened local git repository")
 
-	tags, err := tools.GetGitTagsUpToHead(gitRepo)
+	tags, err := tools.GetGitTagsUpToHeadWithPrefix(gitRepo, tagPrefix)
 
 	logrus.Traceln(tags)
 	if err != nil {
@@ -276,7 +276,7 @@ func (ghrc *GitHubRichClient) findLatestRelease(directory string, githubReleaseM
 	}
 
 	for i := len(tags) - 1; i >= 0; i-- {
-		if latestRelease, found := githubReleaseMap[tags[i].String()]; found {
+		if latestRelease, found := githubReleaseMap[tags[i].Tag]; found {
 			return latestRelease, nil
 		}
 	}

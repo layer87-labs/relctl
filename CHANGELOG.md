@@ -15,6 +15,18 @@ listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
   `RELCTL_LATEST_VERSION` (the latest published release, never a candidate) and `RELCTL_PRERELEASE`. Before,
   `RELCTL_NEXT_VERSION` of a candidate was the candidate.
 - `relctl pr info` no longer fails on a pull request whose merge commit GitHub has not computed yet.
+- `tag_prefix` in `.relctl.yaml` puts a prefix in front of every tag and release (`v` gives `v1.2.3`); the version
+  stays plain. Before, a repository that tags `v1.2.3` never had a latest release, because the tags were not found.
+- Components: parts of one repository that are released independently (`components` in `.relctl.yaml`, `--component`
+  on `release create`, `publish`, `gate` and `pr info`). A component has its own tag prefix (default `<name>/`), its
+  own latest release and its own CalVer counter, so `whisper/202611.3.1` and `router-v202611.3.1` do not interfere.
+  Components are released with the `calver` or `changelog` scheme.
+- `relctl release changed --component NAME` tells whether a file that belongs to the component (glob `paths`) changed
+  since its latest release, so a pipeline builds only what changed. It exports `RELCTL_CHANGED`,
+  `RELCTL_CHANGED_FILES`, `RELCTL_COMPONENT` and `RELCTL_LATEST_VERSION`, and needs no access to GitHub.
+- `relctl release create` also exports `RELCTL_TAG` (the version with the tag prefix) and `RELCTL_COMPONENT`.
+- `relctl docs --out DIR` writes the command line reference as Markdown pages for Docusaurus (hidden command; the
+  output is deterministic). The documentation site regenerates its reference from it.
 
 ## 2.10.2 — 2026-11-02
 

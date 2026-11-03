@@ -19,6 +19,8 @@ type PrInfoArgs struct {
 	VersionScheme string
 	// ConfigFile is the path to .relctl.yaml; empty means default lookup.
 	ConfigFile string
+	// Component previews the release of one component (calver and changelog schemes).
+	Component string
 }
 
 func PrintPRInfos(args *PrInfoArgs) {
@@ -29,7 +31,10 @@ func PrintPRInfos(args *PrInfoArgs) {
 
 	log.Infof("detected ces type: %s", scmLayer.CES.Type)
 
-	scheme, err := resolveVersionScheme(&ReleaseArgs{VersionScheme: args.VersionScheme, ConfigFile: args.ConfigFile})
+	if _, err := applyNamespace(scmLayer, args.ConfigFile, args.Component, args.VersionScheme); err != nil {
+		log.Fatalln(err)
+	}
+	scheme, err := resolveVersionScheme(&ReleaseArgs{VersionScheme: args.VersionScheme, ConfigFile: args.ConfigFile, Component: args.Component})
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -78,6 +83,7 @@ func previewVersion(scmLayer *scmportal.SCMLayer, scheme string, args *PrInfoArg
 	releaseArgs := &ReleaseArgs{
 		VersionScheme:  scheme,
 		ConfigFile:     args.ConfigFile,
+		Component:      args.Component,
 		PrNumber:       args.Number,
 		MergeCommitSHA: args.MergeCommitSHA,
 	}

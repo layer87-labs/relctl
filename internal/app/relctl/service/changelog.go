@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/layer87-labs/relctl/internal/pkg/changelog"
-	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 )
 
 // ErrChangelogNotReleased is returned when the topmost changelog heading has
@@ -54,15 +53,11 @@ func changelogNotes(args *ReleaseArgs, version string) (string, error) {
 
 // changelogFileFor returns the changelog path from the config file.
 func changelogFileFor(args *ReleaseArgs) (string, error) {
-	cfgPath := args.ConfigFile
-	if cfgPath == "" {
-		cfgPath = relctlconfig.DefaultConfigFile
-	}
-	cfg, err := relctlconfig.Load(cfgPath)
+	eff, err := loadEffective(args.ConfigFile, args.Component)
 	if err != nil {
-		return "", fmt.Errorf("loading relctl config: %w", err)
+		return "", err
 	}
-	return cfg.ChangelogFile, nil
+	return eff.ChangelogFile, nil
 }
 
 // changelogReleaseFromFile reads the configured changelog and derives the release.

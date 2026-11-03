@@ -35,6 +35,9 @@ type ReleaseArgs struct {
 	VersionScheme string
 	// ConfigFile is the path to .relctl.yaml; empty means default lookup.
 	ConfigFile string
+	// Component releases one independently released part of the repository (key
+	// "components" in .relctl.yaml) with its own tags and versions.
+	Component string
 	// Prerelease creates a release candidate (X.Y.Z-rc.N, marked as prerelease)
 	// for the computed version instead of the release itself.
 	Prerelease bool
@@ -43,6 +46,9 @@ type ReleaseArgs struct {
 func ReleaseCreate(args *ReleaseArgs) {
 	scmLayer, err := scmportal.LoadSCMPortalLayer()
 	if err != nil {
+		log.Fatalln(err)
+	}
+	if _, err := applyNamespace(scmLayer, args.ConfigFile, args.Component, args.VersionScheme); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -100,7 +106,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Println("### Info output:")
 		fmt.Printf("Would create new release with version: %s\n", version)
 
-		envVars := releaseEnv(version, base, latest, args.Prerelease)
+		envVars := releaseEnv(releaseVars{Version: version, Next: base, Latest: latest, TagPrefix: scmLayer.TagPrefix, Component: args.Component, Prerelease: args.Prerelease})
 
 		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
 			log.Fatalf("could not export env variables: %v", err)
@@ -117,7 +123,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Infof("Create release successful. ID: %d", createdRelease.ID)
 		fmt.Printf("Create release successful. ID: %d", createdRelease.ID)
 
-		envVars := append(releaseEnv(version, base, latest, args.Prerelease),
+		envVars := append(releaseEnv(releaseVars{Version: version, Next: base, Latest: latest, TagPrefix: scmLayer.TagPrefix, Component: args.Component, Prerelease: args.Prerelease}),
 			ces.KeyValue{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", createdRelease.ID)})
 
 		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
@@ -129,6 +135,9 @@ func ReleaseCreate(args *ReleaseArgs) {
 func ReleasePublish(args *ReleaseArgs, releaseID int64, assetsStr []string) {
 	scmLayer, err := scmportal.LoadSCMPortalLayer()
 	if err != nil {
+		log.Fatalln(err)
+	}
+	if _, err := applyNamespace(scmLayer, args.ConfigFile, args.Component, args.VersionScheme); err != nil {
 		log.Fatalln(err)
 	}
 
@@ -212,15 +221,11 @@ func resolveVersionScheme(args *ReleaseArgs) (string, error) {
 	if args.VersionScheme != "" {
 		return args.VersionScheme, nil
 	}
-	cfgPath := args.ConfigFile
-	if cfgPath == "" {
-		cfgPath = relctlconfig.DefaultConfigFile
-	}
-	cfg, err := relctlconfig.Load(cfgPath)
+	eff, err := loadEffective(args.ConfigFile, args.Component)
 	if err != nil {
-		return "", fmt.Errorf("loading relctl config: %w", err)
+		return "", err
 	}
-	return cfg.VersionScheme, nil
+	return eff.VersionScheme, nil
 }
 
 func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, releasePrefix string, err error) {
@@ -245,7 +250,7 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 			return "", "", fmt.Errorf("calver: could not determine repo root: %w", pathErr)
 		}
 		cv := versioning.NewCalVerScheme()
-		version, err = cv.NextVersion(versioning.ReleaseContext{RepoPath: repoPath})
+		version, err = cv.NextVersion(versioning.ReleaseContext{RepoPath: repoPath, TagPrefix: scmLayer.TagPrefix})
 		return version, releasePrefix, err
 	}
 	// --- end CalVer path ---
@@ -299,7 +304,7 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 			log.Fatalln(err)
 		}
 
-		version, err = semver.IncreaseVersion(semver.Bugfix, release.TagName)
+		version, err = semver.IncreaseVersion(semver.Bugfix, release.BaseVersion())
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -370,17 +375,21 @@ func isChangelogScheme(args *ReleaseArgs) bool {
 // releaseEnv returns the variables `release create` exports. They have one meaning each:
 //
 //	RELCTL_VERSION         the version that is created: X.Y.Z, or X.Y.Z-rc.N for a release candidate
+//	RELCTL_TAG             its tag: the version with the tag prefix of the repository or component
 //	RELCTL_NEXT_VERSION    the version of the next release, X.Y.Z. For a release candidate this is the
 //	                       version the candidate is a candidate for, not the candidate itself
 //	RELCTL_LATEST_VERSION  the latest published release before this call (empty if there is none);
 //	                       release candidates are never the latest version
 //	RELCTL_PRERELEASE      "true" for a release candidate, otherwise "false"
-func releaseEnv(version, next, latest string, prerelease bool) []ces.KeyValue {
+//	RELCTL_COMPONENT       the component that is released (empty for the repository itself)
+func releaseEnv(v releaseVars) []ces.KeyValue {
 	return []ces.KeyValue{
-		{Name: "RELCTL_VERSION", Value: version},
-		{Name: "RELCTL_NEXT_VERSION", Value: next},
-		{Name: "RELCTL_LATEST_VERSION", Value: latest},
-		{Name: "RELCTL_PRERELEASE", Value: strconv.FormatBool(prerelease)},
+		{Name: "RELCTL_VERSION", Value: v.Version},
+		{Name: "RELCTL_TAG", Value: v.TagPrefix + v.Version},
+		{Name: "RELCTL_NEXT_VERSION", Value: v.Next},
+		{Name: "RELCTL_LATEST_VERSION", Value: v.Latest},
+		{Name: "RELCTL_PRERELEASE", Value: strconv.FormatBool(v.Prerelease)},
+		{Name: "RELCTL_COMPONENT", Value: v.Component},
 	}
 }
 
@@ -390,7 +399,7 @@ func latestPublishedVersion(scmLayer *scmportal.SCMLayer) string {
 	if err != nil || release == nil {
 		return ""
 	}
-	return release.TagName
+	return release.BaseVersion()
 }
 
 // existingReleaseEnv adds the release id to the exported variables only for a draft:
@@ -407,7 +416,7 @@ func existingReleaseEnv(envVars []ces.KeyValue, id int64, draft bool) []ces.KeyV
 // tag. In that case it exports the version (and the release id, if any) and
 // the caller must not create another release.
 func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version, latest string) bool {
-	envVars := releaseEnv(version, version, latest, false)
+	envVars := releaseEnv(releaseVars{Version: version, Next: version, Latest: latest, TagPrefix: scmLayer.TagPrefix})
 
 	existing, draft, err := scmLayer.FindReleaseByTag(version)
 	if err != nil {
