@@ -3,6 +3,7 @@ module github.com/layer87-labs/relctl
 go 1.26.10
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/coreos/go-semver v0.3.1
 	github.com/ghodss/yaml v1.0.0
 	github.com/go-git/go-git/v5 v5.19.3

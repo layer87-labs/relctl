@@ -3,6 +3,7 @@ package tools
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 
 	"github.com/coreos/go-semver/semver"
@@ -49,38 +50,64 @@ func DevideOwnerAndRepo(fullRepo string) (owner string, repo string) {
 	return
 }
 
+// TaggedVersion is a tag whose name, without the tag prefix, is a version.
+type TaggedVersion struct {
+	// Tag is the full name of the tag, prefix included.
+	Tag     string
+	Version *semver.Version
+}
+
+// GetGitTagsUpToHead returns the tags reachable from HEAD that are versions,
+// ordered by version (lowest first).
 func GetGitTagsUpToHead(gitRepo *git.Repository) (tags []*semver.Version, err error) {
-
+	tagged, err := GetGitTagsUpToHeadWithPrefix(gitRepo, "")
+	if err != nil {
+		return nil, err
+	}
 	tags = []*semver.Version{}
-	commitToTag, _, err := GetGitTagMaps(gitRepo)
+	for _, t := range tagged {
+		tags = append(tags, t.Version)
+	}
+	return tags, nil
+}
 
+// GetGitTagsUpToHeadWithPrefix returns the tags reachable from HEAD whose name
+// starts with prefix and continues as a version, ordered by version (lowest
+// first). Other tags, for example those of another component, are ignored.
+func GetGitTagsUpToHeadWithPrefix(gitRepo *git.Repository, prefix string) (tags []TaggedVersion, err error) {
+	tags = []TaggedVersion{}
+	commitToTag, _, err := GetGitTagMaps(gitRepo)
 	if err != nil {
 		return nil, err
 	}
 
-	headRef, _ := gitRepo.Head()
+	headRef, err := gitRepo.Head()
+	if err != nil {
+		return nil, err
+	}
 
-	tagIter, _ := gitRepo.Log(&git.LogOptions{
+	tagIter, err := gitRepo.Log(&git.LogOptions{
 		From:  headRef.Hash(),
 		Order: git.LogOrderCommitterTime,
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	_ = tagIter.ForEach(func(r *object.Commit) error {
-
-		if tagNames, exists := commitToTag[r.Hash.String()]; exists {
-
-			for _, tagName := range tagNames {
-				parsedVersion, err := semver.NewVersion(tagName)
-				if err == nil {
-					tags = append(tags, parsedVersion)
-				}
+		for _, tagName := range commitToTag[r.Hash.String()] {
+			if !strings.HasPrefix(tagName, prefix) {
+				continue
+			}
+			parsedVersion, err := semver.NewVersion(strings.TrimPrefix(tagName, prefix))
+			if err == nil {
+				tags = append(tags, TaggedVersion{Tag: tagName, Version: parsedVersion})
 			}
 		}
 		return nil
 	})
 
-	semver.Sort(tags)
-
+	sort.SliceStable(tags, func(i, j int) bool { return tags[i].Version.LessThan(*tags[j].Version) })
 	return tags, nil
 }
 

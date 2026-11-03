@@ -54,7 +54,7 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 	// reported for reference.
 	if scheme != relctlconfig.SchemeSemVer && scheme != "" {
 		if repositoryRelease, errLatest := lay.GetLatestPublishedRelease(); errLatest == nil {
-			infos.LatestVersion = repositoryRelease.TagName
+			infos.LatestVersion = repositoryRelease.BaseVersion()
 		}
 		return infos, nil
 	}
@@ -89,7 +89,7 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 			infos.LatestVersion = "0.0.0"
 		} else {
 			log.Infoln("found latest release", repositoryRelease.TagName)
-			infos.LatestVersion = repositoryRelease.TagName
+			infos.LatestVersion = repositoryRelease.BaseVersion()
 		}
 
 		if patchLevel != nil {

@@ -11,6 +11,7 @@ var (
 	formatOut      string
 	mergeCommitSha string
 	versionScheme  string
+	component      string
 	configFile     string
 )
 
@@ -40,6 +41,7 @@ RELCTL_* variables. What decides the version depends on the version scheme:
 			MergeCommitSHA: mergeCommitSha,
 			VersionScheme:  versionScheme,
 			ConfigFile:     configFile,
+			Component:      component,
 		})
 	},
 }
@@ -52,6 +54,7 @@ func init() {
 	infoCmd.Flags().IntVarP(&number, "number", "n", 0, "overwrite the issue number")
 	infoCmd.Flags().StringVarP(&mergeCommitSha, "merge-commit-sha", "c", "", "send a given merge commit sha")
 	infoCmd.Flags().StringVar(&versionScheme, "version-scheme", "", "versioning scheme: semver, calver, conventional-commits or changelog (overrides .relctl.yaml)")
+	infoCmd.Flags().StringVar(&component, "component", "", "preview the release of one component (calver and changelog schemes)")
 	infoCmd.Flags().StringVar(&configFile, "config", "", "path to .relctl.yaml config file")
 	// needs to be implemented
 	// infoCmd.Flags().StringVarP(&formatOut, "output", "o", "", "define output available: [json, yaml]")
