@@ -24,9 +24,9 @@ var ConfigFile string
 var RootCmd = &cobra.Command{
 	Use:     "relctl",
 	Version: fmt.Sprintf("%s (%s)-(%s)", build.Version, build.CommitHash, build.BuildDate),
-	Short:   "relctl make your release tagging easy",
-	Long: `relctl make your release tagging easy
-Comatible with CI pipelines like Jenkins and GitHub
+	Short:   "relctl makes your release tagging easy",
+	Long: `relctl makes your release tagging easy
+Compatible with CI pipelines like Jenkins and GitHub
 Find more information and examples at: https://github.com/layer87-labs/relctl`,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
