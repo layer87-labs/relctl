@@ -120,6 +120,15 @@ changelog_file: CHANGELOG.md
 # branches for `relctl release forward`
 production_branch: main      # receives the releases (default: main)
 development_branch: dev      # default: the default branch of the repository
+
+# tags and releases get this prefix: "v" gives v1.2.3 (the version itself stays 1.2.3)
+tag_prefix: v
+
+# independently released parts of the repository (own tags, own latest release, own counter)
+components:
+  whisper:
+    paths: ["deploy/whisper/**", "deploy/Containerfile.whisper"]
+    version_scheme: calver   # components use calver or changelog
 ```
 
 `default_branch` is the former name of `production_branch` and is still read.
@@ -134,13 +143,16 @@ development_branch: dev      # default: the default branch of the repository
 | `relctl release publish` | publish a draft release and upload assets (`--asset "file=…"`, `zip=`, `tgz=`) |
 | `relctl release gate` | check that the changelog may be released (see flow 3) |
 | `relctl release forward` | bring the production branch back into the development branch (fast-forward or pull request) |
+| `relctl release changed --component NAME` | tell whether the files of a component changed since its latest release, so a pipeline builds only what changed (`--component` also works with `release create`, `publish`, `gate` and `pr info`) |
 | `relctl pr info` | version a pull request would produce |
 | `relctl parse json\|yaml\|version` | read values from JSON, YAML or version strings |
 | `relctl transform group-by` | group a JSON list by a key |
 | `relctl connect github` | store server and repository in `.relctl-connection.yaml` for pipelines that cannot be detected (GitLab CI with a GitHub repository, local shell). The file holds no secret; the token is read from `GITHUB_TOKEN` on every call and never stored |
 
 Variables are exported to the pipeline (GitHub Actions: `$GITHUB_ENV` and step outputs):
-`RELCTL_VERSION`, `RELCTL_NEXT_VERSION`, `RELCTL_RELEASE_ID`, `RELCTL_LATEST_VERSION`, `RELCTL_PR`, …
+`RELCTL_VERSION` (what was created; `X.Y.Z-rc.N` for a candidate), `RELCTL_TAG` (with the tag prefix),
+`RELCTL_NEXT_VERSION` (the release), `RELCTL_LATEST_VERSION` (never a candidate), `RELCTL_RELEASE_ID` (empty for a
+release that is already published), `RELCTL_PRERELEASE`, `RELCTL_COMPONENT`, `RELCTL_CHANGED`, `RELCTL_PR`, …
 `RELCTL_SILENT=true` switches the help comment on pull requests off.
 
 ## Version schemes

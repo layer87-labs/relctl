@@ -3,7 +3,7 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
-## 2.11.0
+## 2.11.0 — 2026-11-03
 
 - `relctl pr info` knows the version scheme (`--version-scheme`, `--config`, or `.relctl.yaml`). For `calver`,
   `conventional-commits` and `changelog` it prints the version the pull request would release instead of a SemVer
