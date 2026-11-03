@@ -3,6 +3,19 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
+## 2.11.0
+
+- `relctl pr info` knows the version scheme (`--version-scheme`, `--config`, or `.relctl.yaml`). For `calver`,
+  `conventional-commits` and `changelog` it prints the version the pull request would release instead of a SemVer
+  version derived from the branch prefix. It also exports `RELCTL_VERSION_SCHEME`.
+- The help comment on pull requests matches the scheme: only SemVer offers `relctl_patch_level` and
+  `relctl_version_override`; the other schemes say what decides their version.
+- The version variables have one meaning each. `relctl release create` exports `RELCTL_VERSION` (what was created,
+  `X.Y.Z` or `X.Y.Z-rc.N`), `RELCTL_NEXT_VERSION` (the release, so `X.Y.Z` also for a candidate),
+  `RELCTL_LATEST_VERSION` (the latest published release, never a candidate) and `RELCTL_PRERELEASE`. Before,
+  `RELCTL_NEXT_VERSION` of a candidate was the candidate.
+- `relctl pr info` no longer fails on a pull request whose merge commit GitHub has not computed yet.
+
 ## 2.10.2 — 2026-11-02
 
 - `relctl release create` no longer hands out a release id for a release that is already published. A pipeline

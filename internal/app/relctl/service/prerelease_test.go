@@ -68,3 +68,34 @@ func TestExistingReleaseEnv(t *testing.T) {
 		require.NotEqual(t, "RELCTL_RELEASE_ID", kv.Name)
 	}
 }
+
+func TestReleaseEnv(t *testing.T) {
+	values := func(kvs []ces.KeyValue) map[string]string {
+		m := map[string]string{}
+		for _, kv := range kvs {
+			m[kv.Name] = kv.Value
+		}
+		return m
+	}
+
+	t.Run("a release", func(t *testing.T) {
+		got := values(releaseEnv("1.4.0", "1.4.0", "1.3.2", false))
+		require.Equal(t, "1.4.0", got["RELCTL_VERSION"])
+		require.Equal(t, "1.4.0", got["RELCTL_NEXT_VERSION"])
+		require.Equal(t, "1.3.2", got["RELCTL_LATEST_VERSION"])
+		require.Equal(t, "false", got["RELCTL_PRERELEASE"])
+	})
+
+	t.Run("a release candidate: next is the release it is a candidate for, not the candidate", func(t *testing.T) {
+		got := values(releaseEnv("1.4.0-rc.3", "1.4.0", "1.3.2", true))
+		require.Equal(t, "1.4.0-rc.3", got["RELCTL_VERSION"])
+		require.Equal(t, "1.4.0", got["RELCTL_NEXT_VERSION"])
+		require.Equal(t, "1.3.2", got["RELCTL_LATEST_VERSION"], "a candidate is never the latest version")
+		require.Equal(t, "true", got["RELCTL_PRERELEASE"])
+	})
+
+	t.Run("first release has no latest version", func(t *testing.T) {
+		got := values(releaseEnv("0.1.0", "0.1.0", "", false))
+		require.Equal(t, "", got["RELCTL_LATEST_VERSION"])
+	})
+}

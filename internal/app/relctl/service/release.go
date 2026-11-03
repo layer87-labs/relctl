@@ -57,6 +57,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 	}
 
 	base := version
+	latest := latestPublishedVersion(scmLayer)
 	if args.Prerelease {
 		// A candidate for a version that is already released can never be released.
 		if released := versionAlreadyReleased(scmLayer, base); released {
@@ -81,7 +82,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		// Idempotent: a version that already has a release (draft or published)
 		// or a tag is not released again. Candidates get a new number every time.
 		if !args.Prerelease {
-			if done := changelogAlreadyReleased(scmLayer, version); done {
+			if done := changelogAlreadyReleased(scmLayer, version, latest); done {
 				return
 			}
 		}
@@ -99,10 +100,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 		fmt.Println("### Info output:")
 		fmt.Printf("Would create new release with version: %s\n", version)
 
-		var envVars = []ces.KeyValue{
-			{Name: "RELCTL_VERSION", Value: version},
-			{Name: "RELCTL_NEXT_VERSION", Value: version},
-		}
+		envVars := releaseEnv(version, base, latest, args.Prerelease)
 
 		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
 			log.Fatalf("could not export env variables: %v", err)
@@ -119,11 +117,8 @@ func ReleaseCreate(args *ReleaseArgs) {
 		log.Infof("Create release successful. ID: %d", createdRelease.ID)
 		fmt.Printf("Create release successful. ID: %d", createdRelease.ID)
 
-		var envVars = []ces.KeyValue{
-			{Name: "RELCTL_VERSION", Value: version},
-			{Name: "RELCTL_NEXT_VERSION", Value: version},
-			{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", createdRelease.ID)},
-		}
+		envVars := append(releaseEnv(version, base, latest, args.Prerelease),
+			ces.KeyValue{Name: "RELCTL_RELEASE_ID", Value: fmt.Sprintf("%d", createdRelease.ID)})
 
 		if err := scmLayer.CES.ExportAsEnv(envVars); err != nil {
 			log.Fatalf("could not export env variables: %v", err)
@@ -323,14 +318,14 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 			}
 		}
 
-		prInfos, err := scmLayer.GetPrInfos(args.PrNumber, args.MergeCommitSHA)
+		prInfos, err := scmLayer.GetPrInfos(args.PrNumber, args.MergeCommitSHA, relctlconfig.SchemeSemVer)
 		if err != nil {
 			log.Fatalln(err)
 		}
 
 		version = prInfos.NextVersion
 
-		if err = prInfosToEnv(scmLayer, prInfos); err != nil {
+		if err = prInfosToEnv(scmLayer, prInfos, relctlconfig.SchemeSemVer); err != nil {
 			log.Fatalln(err)
 		}
 	}
@@ -372,6 +367,32 @@ func isChangelogScheme(args *ReleaseArgs) bool {
 	return err == nil && scheme == relctlconfig.SchemeChangelog
 }
 
+// releaseEnv returns the variables `release create` exports. They have one meaning each:
+//
+//	RELCTL_VERSION         the version that is created: X.Y.Z, or X.Y.Z-rc.N for a release candidate
+//	RELCTL_NEXT_VERSION    the version of the next release, X.Y.Z. For a release candidate this is the
+//	                       version the candidate is a candidate for, not the candidate itself
+//	RELCTL_LATEST_VERSION  the latest published release before this call (empty if there is none);
+//	                       release candidates are never the latest version
+//	RELCTL_PRERELEASE      "true" for a release candidate, otherwise "false"
+func releaseEnv(version, next, latest string, prerelease bool) []ces.KeyValue {
+	return []ces.KeyValue{
+		{Name: "RELCTL_VERSION", Value: version},
+		{Name: "RELCTL_NEXT_VERSION", Value: next},
+		{Name: "RELCTL_LATEST_VERSION", Value: latest},
+		{Name: "RELCTL_PRERELEASE", Value: strconv.FormatBool(prerelease)},
+	}
+}
+
+// latestPublishedVersion returns the tag of the latest published release, or "" if there is none.
+func latestPublishedVersion(scmLayer *scmportal.SCMLayer) string {
+	release, err := scmLayer.GetLatestPublishedRelease()
+	if err != nil || release == nil {
+		return ""
+	}
+	return release.TagName
+}
+
 // existingReleaseEnv adds the release id to the exported variables only for a draft:
 // a pipeline continues with the id (build, publish), so a published release must not
 // hand one out, or the pipeline would build and upload into a finished release.
@@ -385,11 +406,8 @@ func existingReleaseEnv(envVars []ces.KeyValue, id int64, draft bool) []ces.KeyV
 // changelogAlreadyReleased reports whether version already has a release or
 // tag. In that case it exports the version (and the release id, if any) and
 // the caller must not create another release.
-func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version string) bool {
-	envVars := []ces.KeyValue{
-		{Name: "RELCTL_VERSION", Value: version},
-		{Name: "RELCTL_NEXT_VERSION", Value: version},
-	}
+func changelogAlreadyReleased(scmLayer *scmportal.SCMLayer, version, latest string) bool {
+	envVars := releaseEnv(version, version, latest, false)
 
 	existing, draft, err := scmLayer.FindReleaseByTag(version)
 	if err != nil {
