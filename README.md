@@ -1,36 +1,54 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/layer87-labs/relctl)](https://goreportcard.com/report/github.com/layer87-labs/relctl)
-[![GitHub release](https://img.shields.io/github/release/layer87-labs/relctl.svg)](https://github.com/layer87-labs/relctl/releases/latest)
-[![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/layer87-labs/relctl.svg)](https://github.com/layer87-labs/relctl)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/layer87-labs/relctl/blob/main/LICENSE)
+<p align="center">
+  <img alt="relctl: release control for CI/CD" src="assets/banner.png">
+</p>
+
+<p align="center">
+  <a href="https://github.com/layer87-labs/relctl/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/layer87-labs/relctl?display_name=tag&sort=semver"></a>
+  <a href="https://github.com/layer87-labs/relctl/actions/workflows/release.yaml?query=branch%3Adev"><img alt="Build (dev)" src="https://img.shields.io/github/actions/workflow/status/layer87-labs/relctl/release.yaml?branch=dev&label=build"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/layer87-labs/relctl"></a>
+  <a href="https://goreportcard.com/report/github.com/layer87-labs/relctl"><img alt="Go Report Card" src="https://goreportcard.com/badge/github.com/layer87-labs/relctl"></a>
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue.svg"></a>
+</p>
 
 # relctl
 
-**relctl** is a release management CLI for CI/CD pipelines. It works out the next version of your
-project, creates the GitHub release and keeps your pipeline free of release boilerplate. It is the
-successor of [awesome-ci](https://github.com/fullstack-devops/awesome-ci) (see
-[migrating](https://labs.layer87.de/docs/relctl/migrating-from-awesome-ci)).
+**relctl** is a release management CLI for CI/CD pipelines. It works out the next version of your project,
+creates the GitHub release and keeps your pipeline free of release boilerplate. It is the successor of
+[awesome-ci](https://github.com/fullstack-devops/awesome-ci); see the
+[migration guide](https://labs.layer87.de/docs/relctl/migrating-from-awesome-ci).
 
-- **Source control**: GitHub and GitHub Enterprise.
+- **Source control**: GitHub and GitHub Enterprise (GitLab as source control is not supported;
+  [open an issue](https://github.com/layer87-labs/relctl/issues) if you need it).
 - **CI system**: GitHub Actions and Jenkins are detected automatically. Any other pipeline (including GitLab CI)
   connects once with `relctl connect github`.
-- **Four ways to get the version**: from the branch prefix, from Conventional Commits, from the date, or
-  from a reviewed `CHANGELOG.md`.
-- **Technology**: Go, Cobra. Status: stable.
+- **Four ways to get the version**: branch prefix, Conventional Commits, date, or a reviewed `CHANGELOG.md`.
 
-> GitLab as source control system is not supported. If you need it, please
-> [open an issue](https://github.com/layer87-labs/relctl/issues) and describe your use case.
+## Quick start
 
-## Quick start (5 minutes, GitHub Actions)
+**1. Install.** In GitHub Actions use [`relctl-action`](https://github.com/layer87-labs/relctl-action), which
+installs a verified binary (see the example below). Elsewhere, download the release asset and check it against
+`sha256sum.txt` (Linux amd64 shown; asset names are `relctl_<version>_<os>-<arch>`):
 
-**1. Name your branches by what they change.** The prefix decides the version bump of the pull request:
+```bash
+VERSION=2.11.0   # see https://github.com/layer87-labs/relctl/releases/latest
+BASE=https://github.com/layer87-labs/relctl/releases/download/$VERSION
+curl -fsSLO "$BASE/relctl_${VERSION}_linux-amd64"
+curl -fsSLO "$BASE/sha256sum.txt"
+grep " relctl_${VERSION}_linux-amd64\$" sha256sum.txt | sha256sum -c -
+install -m 0755 "relctl_${VERSION}_linux-amd64" /usr/local/bin/relctl
+```
 
-| Branch prefix | Bump | Example |
-| --- | --- | --- |
-| `fix/`, `bugfix/`, `patch/`, `dependabot/` | patch | 1.2.3 → 1.2.4 |
-| `feat/`, `feature/`, `minor/` | minor | 1.2.3 → 1.3.0 |
-| `major/`, or any prefix ending in `!` (`feat!/`) | major | 1.2.3 → 2.0.0 |
+**2. Run the three commands that matter.** All of them read the token from `GITHUB_TOKEN`:
 
-**2. Add a release workflow.** Every merge to `main` creates a draft release, builds, and publishes it:
+```bash
+relctl pr info                                                  # on a pull request: the version it would release
+relctl release create --merge-sha "$GITHUB_SHA"                 # on main: compute the version, create a draft release
+relctl release publish --release-id "$RELCTL_RELEASE_ID" \
+  --asset "file=dist/app"                                       # upload assets and publish
+```
+
+`release create` exports `RELCTL_VERSION` and `RELCTL_RELEASE_ID` for the following steps. Add `--dry-run` to
+preview. In GitHub Actions:
 
 ```yaml
 # .github/workflows/release.yaml
@@ -49,35 +67,40 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with: { fetch-depth: 0 }
-
       - uses: layer87-labs/relctl-action@v1
         with: { github-token: "${{ secrets.GITHUB_TOKEN }}" }
-
       - id: release
         run: relctl release create --merge-sha ${{ github.sha }}
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
-
       # ... build your artifacts, use ${{ steps.release.outputs.RELCTL_VERSION }} ...
-
       - run: relctl release publish --release-id ${{ steps.release.outputs.RELCTL_RELEASE_ID }} --asset "file=dist/app"
         env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
 ```
 
-**3. Preview the version on pull requests** (optional): `relctl pr info` prints the version a pull request
-would produce, and relctl posts a help comment on the pull request.
+Without a config file relctl uses SemVer from the branch prefix of the merged pull request:
 
-That is all. Without a config file relctl uses SemVer from the branch prefix.
+| Branch prefix | Bump | Example |
+| --- | --- | --- |
+| `fix/`, `bugfix/`, `patch/`, `dependabot/` | patch | 1.2.3 → 1.2.4 |
+| `feat/`, `feature/`, `minor/` | minor | 1.2.3 → 1.3.0 |
+| `major/`, or any prefix ending in `!` (`feat!/`) | major | 1.2.3 → 2.0.0 |
 
-### Overriding the version on a pull request
+To override it, comment on the pull request before merging (the comment must start with the command):
+`relctl_patch_level: major` forces a bump level, `relctl_version_override: 2.1.0` pins the version.
 
-Comment on the pull request before merging. The comment must start with the command:
+## Reviewed releases (flow 3)
 
-| Comment | Effect |
-| --- | --- |
-| `relctl_patch_level: major` | force a bump level |
-| `relctl_version_override: 2.1.0` | pin the version |
+Work lands on `dev`; the version is written down in `CHANGELOG.md` and visible in review:
 
-## Choose your flow
+1. Every push to `dev` runs `relctl release create --prerelease` and publishes a candidate `X.Y.Z-rc.N`.
+2. To release, open a pull request `dev` → `main` that dates the topmost heading (`## 1.4.0 — 2026-10-02`).
+3. `relctl release gate --sha "$HEAD_SHA"` is the required check: the heading is dated and has notes, the version
+   is not released yet, and a candidate exists for exactly this commit.
+4. Merge with a **merge commit**, never a squash. The push to `main` runs `relctl release create` and publishes `X.Y.Z`.
+5. `relctl release forward` brings `main` back into `dev`.
+
+Details: [release flows](https://labs.layer87.de/docs/relctl/release-flows). Flows 1 and 2 release on every merge
+to `main`:
 
 | | Flow 1 | Flow 2 | Flow 3 |
 | --- | --- | --- | --- |
@@ -85,26 +108,6 @@ Comment on the pull request before merging. The comment must start with the comm
 | Version from | branch prefix | commit messages or date | `CHANGELOG.md` heading |
 | `version_scheme` | `semver` (default) | `conventional-commits`, `calver` | `changelog` |
 | Good for | libraries, CLIs | services, apps | products with deliberate releases |
-
-### Flow 3 in short: reviewed releases from a development branch
-
-Work lands on `dev`; the version is written down in `CHANGELOG.md` and visible in review:
-
-```markdown
-## 1.4.0                   <- upcoming (on dev)
-## 1.4.0 — 2026-10-02      <- released: version, dash, ISO date
-```
-
-```bash
-relctl release create --prerelease     # every push to dev: 1.4.0-rc.1, rc.2, ... (prerelease)
-relctl release gate --sha "$HEAD_SHA"  # required check on the release pull request (dev -> main)
-relctl release create                  # on main: creates 1.4.0 from the dated heading, idempotent
-relctl release forward                 # afterwards: bring main back into dev
-```
-
-The gate passes only if the heading is dated and has notes, the version is not released yet, and a release
-candidate exists for exactly the commit being released. See the
-[release flows](https://labs.layer87.de/docs/relctl/release-flows).
 
 ## Configuration: `.relctl.yaml`
 
@@ -166,18 +169,11 @@ release that is already published), `RELCTL_PRERELEASE`, `RELCTL_COMPONENT`, `RE
 - **changelog**: the topmost `## X.Y.Z — YYYY-MM-DD` heading of the changelog. Strict format: no `v`, no
   suffix, a real date. An undated heading is not released, and the release is idempotent.
 
-## Installation
-
-- **GitHub Actions** (recommended): [`layer87-labs/relctl-action`](https://github.com/layer87-labs/relctl-action)
-  installs a verified binary.
-- **Manually**: download `relctl_<version>_<os>-<arch>` and `sha256sum.txt` from the
-  [latest release](https://github.com/layer87-labs/relctl/releases/latest), verify the checksum and add the
-  binary to your `PATH`.
-
 ## Documentation
 
-Full documentation, including a migration guide from awesome-ci and a runbook an AI agent can follow to migrate
-a repository: **https://labs.layer87.de/docs/relctl/intro**
+- [Documentation](https://labs.layer87.de/docs/relctl/intro): CLI reference, version schemes, release flows
+- [Migrating from awesome-ci](https://labs.layer87.de/docs/relctl/migrating-from-awesome-ci), including a runbook an AI agent can follow
+- [relctl-action](https://github.com/layer87-labs/relctl-action): setup action and reusable workflows
 
 ## Getting help
 
