@@ -136,7 +136,6 @@ To publish a release with a specific release ID and assets, use the following co
     relctl release publish --release-id 12345 \
         --asset "file=out/relctl_v1.0.0_amd64" \
         --asset "file=out/relctl_v1.0.0_arm64"
-	relctl release publish --release-id 12345 --asset "file=out/relctl_v1.0.0_amd64" --asset "file=out/relctl_v1.0.0_arm64"
 
 If the release ID is not provided, the command will look for the 'RELCTL_RELEASE_ID' environment variable:
 
@@ -144,8 +143,6 @@ If the release ID is not provided, the command will look for the 'RELCTL_RELEASE
     relctl release publish \
         --asset "file=out/relctl_v1.0.0_amd64" \
         --asset "file=out/relctl_v1.0.0_arm64"
-	export RELCTL_RELEASE_ID=12345
-	relctl release publish --asset "file=out/relctl_v1.0.0_amd64" --asset "file=out/relctl_v1.0.0_arm64"
 
 You can also publish a release with a directory as a zip asset:
 
