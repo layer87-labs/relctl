@@ -6,6 +6,7 @@ import (
 
 	"github.com/layer87-labs/relctl/internal/app/build"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/connect"
+	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/docs"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/parse"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/pullrequest"
 	"github.com/layer87-labs/relctl/internal/app/relctl/cmd/release"
@@ -39,6 +40,7 @@ func init() {
 	RootCmd.AddCommand(parse.Cmd)
 	RootCmd.AddCommand(connect.Cmd)
 	RootCmd.AddCommand(transform.Cmd)
+	RootCmd.AddCommand(docs.New(RootCmd))
 
 	// flags
 	RootCmd.PersistentFlags().BoolVarP(&Verbose, "verbose", "v", false, "verbose output")

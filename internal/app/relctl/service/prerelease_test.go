@@ -4,6 +4,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/coreos/go-semver/semver"
+	"github.com/layer87-labs/relctl/internal/pkg/tools"
+
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 
 	"github.com/stretchr/testify/require"
@@ -67,4 +70,66 @@ func TestExistingReleaseEnv(t *testing.T) {
 	for _, kv := range published {
 		require.NotEqual(t, "RELCTL_RELEASE_ID", kv.Name)
 	}
+}
+
+func TestReleaseEnv(t *testing.T) {
+	values := func(kvs []ces.KeyValue) map[string]string {
+		m := map[string]string{}
+		for _, kv := range kvs {
+			m[kv.Name] = kv.Value
+		}
+		return m
+	}
+
+	t.Run("a release", func(t *testing.T) {
+		got := values(releaseEnv(releaseVars{Version: "1.4.0", Next: "1.4.0", Latest: "1.3.2"}))
+		require.Equal(t, "1.4.0", got["RELCTL_VERSION"])
+		require.Equal(t, "1.4.0", got["RELCTL_TAG"])
+		require.Equal(t, "1.4.0", got["RELCTL_NEXT_VERSION"])
+		require.Equal(t, "1.3.2", got["RELCTL_LATEST_VERSION"])
+		require.Equal(t, "false", got["RELCTL_PRERELEASE"])
+		require.Equal(t, "", got["RELCTL_COMPONENT"])
+	})
+
+	t.Run("a release candidate: next is the release it is a candidate for, not the candidate", func(t *testing.T) {
+		got := values(releaseEnv(releaseVars{Version: "1.4.0-rc.3", Next: "1.4.0", Latest: "1.3.2", Prerelease: true}))
+		require.Equal(t, "1.4.0-rc.3", got["RELCTL_VERSION"])
+		require.Equal(t, "1.4.0", got["RELCTL_NEXT_VERSION"])
+		require.Equal(t, "1.3.2", got["RELCTL_LATEST_VERSION"], "a candidate is never the latest version")
+		require.Equal(t, "true", got["RELCTL_PRERELEASE"])
+	})
+
+	t.Run("first release has no latest version", func(t *testing.T) {
+		got := values(releaseEnv(releaseVars{Version: "0.1.0", Next: "0.1.0"}))
+		require.Equal(t, "", got["RELCTL_LATEST_VERSION"])
+	})
+
+	t.Run("the version stays plain, the tag carries the prefix", func(t *testing.T) {
+		got := values(releaseEnv(releaseVars{Version: "202611.3.2", Next: "202611.3.2", Latest: "202611.3.1", TagPrefix: "whisper/", Component: "whisper"}))
+		require.Equal(t, "202611.3.2", got["RELCTL_VERSION"])
+		require.Equal(t, "whisper/202611.3.2", got["RELCTL_TAG"])
+		require.Equal(t, "202611.3.1", got["RELCTL_LATEST_VERSION"])
+		require.Equal(t, "whisper", got["RELCTL_COMPONENT"])
+	})
+}
+
+func TestLatestReleaseTag(t *testing.T) {
+	v := func(tag, version string) tools.TaggedVersion {
+		return tools.TaggedVersion{Tag: tag, Version: semver.New(version)}
+	}
+
+	tags := []tools.TaggedVersion{
+		v("whisper/1.0.0", "1.0.0"),
+		v("whisper/1.1.0", "1.1.0"),
+		v("whisper/1.2.0-rc.1", "1.2.0-rc.1"), // a candidate of an unreleased version is not a release
+		v("whisper/1.2.0-rc.2", "1.2.0-rc.2"),
+	}
+	got, ok := latestReleaseTag(tags)
+	require.True(t, ok)
+	require.Equal(t, "whisper/1.1.0", got.Tag)
+
+	_, ok = latestReleaseTag(tags[2:])
+	require.False(t, ok, "only candidates: no release yet")
+	_, ok = latestReleaseTag(nil)
+	require.False(t, ok)
 }

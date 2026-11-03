@@ -52,7 +52,7 @@ func (ghrc *GitHubRichClient) GetIssueComments(issueNumber int) (issueComments [
 	return nil, err
 }
 
-func (ghrc *GitHubRichClient) CommentHelpToPullRequest(number int) (err error) {
+func (ghrc *GitHubRichClient) CommentHelpToPullRequest(number int, scheme string) (err error) {
 	var commentOpts = &github.IssueListCommentsOptions{
 		Direction:   &direction,
 		Sort:        &sort,
@@ -63,19 +63,7 @@ func (ghrc *GitHubRichClient) CommentHelpToPullRequest(number int) (err error) {
 		return fmt.Errorf("unable to list comments on pull request %d: %w", number, err)
 	}
 
-	body := detailsOpening + `
-
-| command | description |
-| --- | --- |
-| relctl_patch_level: major | create a major version bump (a branch prefix like feat!/ does the same) |
-| relctl_version_override: 2.1.0 | set the version to 2.1.0 using only semver compatible syntax! |
-
-Need more help?
-
-Have a look at [my repo](https://github.com/layer87-labs/relctl)
-
-This message was created by relctl and can be disabled by the env variable <code>RELCTL_SILENT=true</code>
-</details>`
+	body := HelpCommentBody(scheme)
 
 	var prComment *github.IssueComment
 	for _, prc := range comments {
@@ -183,4 +171,40 @@ func matchPatchLevel(body string) string {
 		return ""
 	}
 	return m[1]
+}
+
+// HelpCommentBody returns the text of the help comment for a pull request.
+// What a pull request can do depends on the version scheme: only SemVer reads
+// the branch prefix and the comment commands.
+func HelpCommentBody(scheme string) string {
+	const footer = `
+
+Need more help?
+
+Have a look at [my repo](https://github.com/layer87-labs/relctl)
+
+This message was created by relctl and can be disabled by the env variable <code>RELCTL_SILENT=true</code>
+</details>`
+
+	switch scheme {
+	case "calver":
+		return detailsOpening + `
+
+Version scheme: **calver**. The version of the release is the date of the release (` + "`YYYYMM.D.N`" + `, N counts the releases of that day). Branch prefixes and comment commands have no effect.` + footer
+	case "conventional-commits":
+		return detailsOpening + `
+
+Version scheme: **conventional-commits**. The version is derived from the commit messages since the last release: a breaking change (` + "`feat!:`" + ` or a ` + "`BREAKING CHANGE`" + ` footer) is a major, ` + "`feat:`" + ` a minor, anything else a patch bump. With squash merges the pull request title is the commit message, so it must be a Conventional Commit. Branch prefixes and comment commands have no effect.` + footer
+	case "changelog":
+		return detailsOpening + `
+
+Version scheme: **changelog**. The version is the topmost ` + "`## X.Y.Z`" + ` heading of the changelog; the release is made when the heading is dated and the change reaches the production branch. Branch prefixes and comment commands have no effect.` + footer
+	default:
+		return detailsOpening + `
+
+| command | description |
+| --- | --- |
+| relctl_patch_level: major | create a major version bump (a branch prefix like feat!/ does the same) |
+| relctl_version_override: 2.1.0 | set the version to 2.1.0 using only semver compatible syntax! |` + footer
+	}
 }

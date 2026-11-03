@@ -6,6 +6,9 @@ package versioning
 type ReleaseContext struct {
 	// RepoPath is the path to the local Git repository root.
 	RepoPath string
+	// TagPrefix is put in front of the version in a tag ("v", "whisper/"). Tags
+	// without it are not considered. Empty means the tags are plain versions.
+	TagPrefix string
 }
 
 // VersionScheme is the interface every versioning strategy must implement.

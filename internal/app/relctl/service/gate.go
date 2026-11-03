@@ -23,6 +23,8 @@ type GateArgs struct {
 	Sha string
 	// RequireCandidate additionally demands a release candidate for Sha.
 	RequireCandidate bool
+	// Component checks the changelog and release candidates of one component.
+	Component string
 }
 
 // GateCheck is the result of one check of the release gate.
@@ -138,7 +140,11 @@ func ReleaseGate(args *GateArgs) {
 		log.Fatalln(err)
 	}
 
-	path, err := changelogFileFor(&ReleaseArgs{ConfigFile: args.ConfigFile})
+	if _, err := applyNamespace(scmLayer, args.ConfigFile, args.Component, ""); err != nil {
+		log.Fatalln(err)
+	}
+
+	path, err := changelogFileFor(&ReleaseArgs{ConfigFile: args.ConfigFile, Component: args.Component})
 	if err != nil {
 		log.Fatalln(err)
 	}

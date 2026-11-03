@@ -50,7 +50,7 @@ func (c *CalVerScheme) NextVersion(ctx ReleaseContext) (string, error) {
 		return "", fmt.Errorf("calver: listing git tags: %w", err)
 	}
 
-	n := nextN(prefix, tags)
+	n := nextN(prefix, stripTagPrefix(ctx.TagPrefix, tags))
 	return fmt.Sprintf("%s.%d", prefix, n), nil
 }
 
@@ -120,4 +120,19 @@ func listTagNames(path string) ([]string, error) {
 		return nil
 	})
 	return names, err
+}
+
+// stripTagPrefix returns the tags that start with tagPrefix, without it. With an
+// empty prefix every tag is returned unchanged.
+func stripTagPrefix(tagPrefix string, tags []string) []string {
+	if tagPrefix == "" {
+		return tags
+	}
+	out := make([]string, 0, len(tags))
+	for _, tag := range tags {
+		if strings.HasPrefix(tag, tagPrefix) {
+			out = append(out, strings.TrimPrefix(tag, tagPrefix))
+		}
+	}
+	return out
 }

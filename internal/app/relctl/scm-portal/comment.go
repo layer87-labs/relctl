@@ -7,7 +7,7 @@ import (
 )
 
 // CommentHelpToPullRequest comments to a pull or merge request if awesome ci is running in CI mode
-func (lay SCMLayer) CommentHelpToPullRequest(number int) (err error) {
+func (lay SCMLayer) CommentHelpToPullRequest(number int, scheme string) (err error) {
 	ci, ciPresent := os.LookupEnv("CI")
 	isCI := ci == "true" && ciPresent
 
@@ -16,7 +16,7 @@ func (lay SCMLayer) CommentHelpToPullRequest(number int) (err error) {
 	_, isLegacySilent := os.LookupEnv("ACI_SILENT")
 	if isCI && !isSilent && !isLegacySilent {
 		grc := lay.Grc.(*github.GitHubRichClient)
-		err := grc.CommentHelpToPullRequest(number)
+		err := grc.CommentHelpToPullRequest(number, scheme)
 		if err != nil {
 			return err
 		}
