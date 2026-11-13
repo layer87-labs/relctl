@@ -3,7 +3,7 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
-## 2.12.0
+## 2.12.0 — 2026-11-13
 
 - SemVer scheme: breaking-change detection. relctl reads the pull request title, its description and its own commits:
   `fix!:` / `fix(scope)!:` in the title or a commit subject, or a `BREAKING CHANGE: ` / `BREAKING-CHANGE: ` footer at
@@ -14,6 +14,7 @@ listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
   Actions run summary and on top of the release notes; `major` raises the bump to major; `off` ignores the markers.
   **The default becomes `major` in 3.0.0.** Set `breaking_markers: major` to get it now.
 - `relctl pr info` prints where the breaking-change marker was found.
+- Built with Go 1.26.11.
 
 ## 2.11.0 — 2026-11-03
 
