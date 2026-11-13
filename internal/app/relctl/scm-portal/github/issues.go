@@ -205,6 +205,8 @@ Version scheme: **changelog**. The version is the topmost ` + "`## X.Y.Z`" + ` h
 | command | description |
 | --- | --- |
 | relctl_patch_level: major | create a major version bump (a branch prefix like feat!/ does the same) |
-| relctl_version_override: 2.1.0 | set the version to 2.1.0 using only semver compatible syntax! |` + footer
+| relctl_version_override: 2.1.0 | set the version to 2.1.0 using only semver compatible syntax! |
+
+A breaking change (` + "`fix!:`" + ` in the title or a commit subject, or a ` + "`BREAKING CHANGE:`" + ` footer) is a major bump whatever the branch prefix (setting ` + "`breaking_markers`" + `).` + footer
 	}
 }

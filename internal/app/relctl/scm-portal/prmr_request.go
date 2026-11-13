@@ -59,18 +59,40 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 		return infos, nil
 	}
 
-	// Parse the patch level from the branch name
-	if infos.PatchLevel, err = semver.ParsePatchLevelFormBranch(infos.BranchName); err != nil {
-		log.Warnln(err)
-	}
-	log.Traceln("completed PR standard information to: ", *infos)
-
 	// Read comments from the pull request or merge request
 	// and look for overrides
 	log.Traceln("read comments from pr/mr and looking for overrides")
 	version, patchLevel, err := lay.SearchIssuesForOverrides(infos.Number)
 	if err != nil {
 		return nil, err
+	}
+
+	// The branch prefix, a relctl_patch_level comment and a breaking-change
+	// marker decide the bump.
+	in := levelInput{
+		Branch:   infos.BranchName,
+		Override: patchLevel,
+		Title:    prInfos.GetTitle(),
+		Body:     prInfos.GetBody(),
+		Mode:     lay.BreakingMarkers,
+	}
+	if in.Mode != relctlconfig.BreakingMarkersOff {
+		if in.Commits, err = grc.PullRequestCommits(infos.Number); err != nil {
+			return nil, err
+		}
+	}
+	decision := decidePatchLevel(in)
+	infos.PatchLevel = decision.Level
+	infos.BreakingMarker = decision.Marker
+	infos.BreakingWarning = decision.Warning
+	if patchLevel != nil {
+		log.Infof("detected a patch level override to %s", *patchLevel)
+	}
+	if decision.Marker != "" {
+		log.Infof("breaking change marker found in %s", decision.Marker)
+	}
+	if decision.Warning != "" {
+		log.Warnln(decision.Warning)
 	}
 
 	if version != nil {
@@ -92,11 +114,7 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 			infos.LatestVersion = repositoryRelease.BaseVersion()
 		}
 
-		if patchLevel != nil {
-			infos.PatchLevel = *patchLevel
-			log.Infof("detected a patch level override to %s", infos.PatchLevel)
-		}
-		// Increment the version based on the patch level override
+		// Increment the version by the decided patch level
 		if infos.NextVersion, err = semver.IncreaseVersion(infos.PatchLevel, infos.LatestVersion); err != nil {
 			return nil, err
 		}

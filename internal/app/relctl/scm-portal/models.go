@@ -15,6 +15,9 @@ type SCMLayer struct {
 	// writes. Callers work with versions; the layer maps them to tags. It is set
 	// for a repository that tags "v1.2.3" and for every component ("whisper/...").
 	TagPrefix string
+	// BreakingMarkers is the breaking_markers setting of .relctl.yaml: "major"
+	// (also when empty), "warn" or "off".
+	BreakingMarkers string
 }
 
 // tag returns the tag of a version.
@@ -43,6 +46,12 @@ type PrMrRequestInfos struct {
 	ShaShort       string
 	BranchName     string
 	MergeCommitSha string
+	// BreakingMarker says where a breaking-change marker was found ("the pull
+	// request title", "commit 1a2b3c4d"); empty if there is none or the check is off.
+	BreakingMarker string
+	// BreakingWarning is set when a breaking-change marker did not make the bump
+	// major (breaking_markers: warn). It belongs in the log and the release notes.
+	BreakingWarning string
 }
 
 type Release struct {

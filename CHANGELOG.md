@@ -3,6 +3,17 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
+## 2.12.0
+
+- SemVer scheme: a breaking change is released as a major version, whatever the branch prefix. relctl reads the
+  pull request title, its description and its own commits: `fix!:` / `fix(scope)!:` in the title or a commit
+  subject, or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer at the start of a line (not in a code block), raises
+  the bump to major. Before, a pull request from `fix/...` titled `fix(forms)!: ...` was released as a patch.
+  **Behaviour change:** a pull request that carries such a marker now gets a major release. `breaking_markers: warn`
+  in `.relctl.yaml` keeps the bump of the branch prefix and warns in the log, the GitHub Actions run summary and on
+  top of the release notes; `breaking_markers: off` restores the old behaviour.
+- `relctl pr info` prints where the breaking-change marker was found.
+
 ## 2.11.0 — 2026-11-03
 
 - `relctl pr info` knows the version scheme (`--version-scheme`, `--config`, or `.relctl.yaml`). For `calver`,

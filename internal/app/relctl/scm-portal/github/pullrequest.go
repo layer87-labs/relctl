@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v86/github"
+	"github.com/layer87-labs/relctl/internal/pkg/conventionalcommits"
 	"github.com/sirupsen/logrus"
 )
 
@@ -88,4 +89,25 @@ func pickPullRequest(candidates []*github.PullRequest, sha string) *github.PullR
 		return bestExact
 	}
 	return best
+}
+
+// PullRequestCommits returns the commits of a pull request, and only those:
+// neither the merge commit nor commits of the target branch. GitHub lists at
+// most 250 commits per pull request.
+func (ghrc *GitHubRichClient) PullRequestCommits(prNumber int) ([]conventionalcommits.Commit, error) {
+	var commits []conventionalcommits.Commit
+	opts := &github.ListOptions{PerPage: 100}
+	for {
+		page, resp, err := ghrc.Client.PullRequests.ListCommits(ctx, ghrc.Owner, ghrc.Repository, prNumber, opts)
+		if err != nil {
+			return nil, fmt.Errorf("could not list the commits of pull request %d: %v", prNumber, err)
+		}
+		for _, c := range page {
+			commits = append(commits, conventionalcommits.Commit{SHA: c.GetSHA(), Message: c.GetCommit().GetMessage()})
+		}
+		if resp == nil || resp.NextPage == 0 {
+			return commits, nil
+		}
+		opts.Page = resp.NextPage
+	}
 }
