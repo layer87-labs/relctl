@@ -1,7 +1,11 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+
+	"github.com/google/go-github/v86/github"
 
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
@@ -59,15 +63,70 @@ func decideForward(status string) forwardAction {
 	}
 }
 
+// forwardAPI is the part of the SCM layer that comparing and recreating needs.
+type forwardAPI interface {
+	CompareStatus(base, head string) (string, error)
+	BranchExists(branch string) (bool, error)
+	BranchSHA(branch string) (string, error)
+	CreateBranch(branch, sha string) error
+}
+
+// compareOrRecreate compares production (from) with development (to). If the
+// comparison fails with 404 because the development branch does not exist
+// (typically deleted when the release pull request merged and the repository
+// deletes head branches on merge), it recreates the development branch at the
+// production head, which is a complete forward. This only happens when
+// recreate is true, that is, when "to" is the development_branch of the
+// configuration: a name from --to may be a typo. Every other error is returned.
+// With dryRun nothing is created. recreated is "" (compared normally),
+// "recreated" or "would recreate" (dry run).
+func compareOrRecreate(api forwardAPI, from, to string, recreate, dryRun bool) (status, recreated string, err error) {
+	status, err = api.CompareStatus(to, from)
+	if err == nil {
+		return status, "", nil
+	}
+	var ghErr *github.ErrorResponse
+	if !errors.As(err, &ghErr) || ghErr.Response == nil || ghErr.Response.StatusCode != http.StatusNotFound {
+		return "", "", err
+	}
+	exists, existsErr := api.BranchExists(to)
+	if existsErr != nil {
+		return "", "", fmt.Errorf("%w (checking whether %q exists failed: %v)", err, to, existsErr)
+	}
+	if exists {
+		// the 404 has another cause (e.g. the production branch is missing)
+		return "", "", err
+	}
+	if !recreate {
+		return "", "", fmt.Errorf("branch %q does not exist and is not the development_branch of the configuration, "+
+			"so it is not created (check --to for a typo): %w", to, err)
+	}
+	if dryRun {
+		return "", "would recreate", nil
+	}
+	sha, shaErr := api.BranchSHA(from)
+	if shaErr != nil {
+		return "", "", shaErr
+	}
+	if createErr := api.CreateBranch(to, sha); createErr != nil {
+		// another run may have created it in the meantime: that is success
+		if ok, _ := api.BranchExists(to); !ok {
+			return "", "", fmt.Errorf("could not recreate branch %q (does the token have permission to create branches?): %w", to, createErr)
+		}
+	}
+	log.Warnf("branch %s did not exist (deleted after the merge of the release pull request?), recreated it at the head of %s (%s)", to, from, shortSha(sha))
+	return "", "recreated", nil
+}
+
 // forwardBranches returns the production and development branch from flags and config.
-func forwardBranches(args *ForwardArgs, defaultBranch func() (string, error)) (from, to string, err error) {
+func forwardBranches(args *ForwardArgs, defaultBranch func() (string, error)) (from, to string, configured bool, err error) {
 	cfgPath := args.ConfigFile
 	if cfgPath == "" {
 		cfgPath = relctlconfig.DefaultConfigFile
 	}
 	cfg, err := relctlconfig.Load(cfgPath)
 	if err != nil {
-		return "", "", fmt.Errorf("loading relctl config: %w", err)
+		return "", "", false, fmt.Errorf("loading relctl config: %w", err)
 	}
 	from, to = args.From, args.To
 	if from == "" {
@@ -75,18 +134,19 @@ func forwardBranches(args *ForwardArgs, defaultBranch func() (string, error)) (f
 	}
 	if to == "" {
 		to = cfg.DevelopmentBranch
+		configured = to != ""
 	}
 	if to == "" {
 		to, err = defaultBranch()
 		if err != nil {
-			return "", "", err
+			return "", "", false, err
 		}
 	}
 	if from == to {
-		return "", "", fmt.Errorf("the production branch and the development branch are both %q: nothing to forward. "+
+		return "", "", false, fmt.Errorf("the production branch and the development branch are both %q: nothing to forward. "+
 			"Set development_branch in .relctl.yaml if you work on a different branch", from)
 	}
-	return from, to, nil
+	return from, to, configured, nil
 }
 
 // ReleaseForward brings the production branch back into the development branch
@@ -100,17 +160,15 @@ func ReleaseForward(args *ForwardArgs) {
 		log.Fatalln(err)
 	}
 
-	from, to, err := forwardBranches(args, scmLayer.RepositoryDefaultBranch)
+	from, to, configured, err := forwardBranches(args, scmLayer.RepositoryDefaultBranch)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	status, err := scmLayer.CompareStatus(to, from)
+	status, recreated, err := compareOrRecreate(scmLayer, from, to, configured, args.DryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	action := decideForward(status)
-	log.Infof("comparing %s with %s: %s -> %s", from, to, status, action)
 
 	export := func(result, pr string) {
 		vars := []ces.KeyValue{{Name: "RELCTL_FORWARD_RESULT", Value: result}}
@@ -121,6 +179,20 @@ func ReleaseForward(args *ForwardArgs) {
 			log.Fatalf("could not export env variables: %v", err)
 		}
 	}
+
+	if recreated != "" {
+		// the result is "recreated" in a dry run, too; the text tells them apart
+		if recreated == "would recreate" {
+			fmt.Printf("Would recreate %s from %s: it does not exist\n", to, from)
+		} else {
+			fmt.Printf("%s did not exist and was recreated from %s\n", to, from)
+		}
+		export("recreated", "")
+		return
+	}
+
+	action := decideForward(status)
+	log.Infof("comparing %s with %s: %s -> %s", from, to, status, action)
 
 	if action == forwardNothing {
 		fmt.Printf("%s already contains %s, nothing to forward\n", to, from)

@@ -2,6 +2,7 @@ package github
 
 import (
 	"fmt"
+	"net/http"
 
 	"github.com/google/go-github/v86/github"
 )
@@ -19,9 +20,30 @@ func (ghrc *GitHubRichClient) RepositoryDefaultBranch() (string, error) {
 func (ghrc *GitHubRichClient) BranchSHA(branch string) (string, error) {
 	b, _, err := ghrc.Client.Repositories.GetBranch(ctx, ghrc.Owner, ghrc.Repository, branch, 0)
 	if err != nil {
-		return "", fmt.Errorf("error at reading branch %q: %v", branch, err)
+		return "", fmt.Errorf("error at reading branch %q: %w", branch, err)
 	}
 	return b.GetCommit().GetSHA(), nil
+}
+
+// BranchExists reports whether a branch exists.
+func (ghrc *GitHubRichClient) BranchExists(branch string) (bool, error) {
+	_, resp, err := ghrc.Client.Repositories.GetBranch(ctx, ghrc.Owner, ghrc.Repository, branch, 0)
+	if err != nil {
+		if resp != nil && resp.StatusCode == http.StatusNotFound {
+			return false, nil
+		}
+		return false, fmt.Errorf("error at reading branch %q: %w", branch, err)
+	}
+	return true, nil
+}
+
+// CreateBranch creates a branch pointing to sha.
+func (ghrc *GitHubRichClient) CreateBranch(branch, sha string) error {
+	_, _, err := ghrc.Client.Git.CreateRef(ctx, ghrc.Owner, ghrc.Repository, github.CreateRef{Ref: "refs/heads/" + branch, SHA: sha})
+	if err != nil {
+		return fmt.Errorf("error at creating branch %q: %w", branch, err)
+	}
+	return nil
 }
 
 // CompareStatus compares head with base and returns GitHub's status: "identical",
@@ -30,7 +52,7 @@ func (ghrc *GitHubRichClient) BranchSHA(branch string) (string, error) {
 func (ghrc *GitHubRichClient) CompareStatus(base, head string) (string, error) {
 	cmp, _, err := ghrc.Client.Repositories.CompareCommits(ctx, ghrc.Owner, ghrc.Repository, base, head, &github.ListOptions{PerPage: 1})
 	if err != nil {
-		return "", fmt.Errorf("error at comparing %q with %q: %v", base, head, err)
+		return "", fmt.Errorf("error at comparing %q with %q: %w", base, head, err)
 	}
 	return cmp.GetStatus(), nil
 }
