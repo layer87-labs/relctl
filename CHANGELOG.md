@@ -3,6 +3,15 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
+## 2.12.1 — 2026-11-13
+
+- `relctl release forward` recreates the development branch at the head of the production branch when it does not
+  exist. This happens when the repository deletes head branches on merge and the release pull request was
+  `dev` into `main`; before, the command failed with `404 Not Found` while comparing the branches. The branch is only recreated
+  when it is the `development_branch` of `.relctl.yaml`, never for a name given with `--to`. Other errors still fail
+  the command. The result is reported as `RELCTL_FORWARD_RESULT=recreated` (also with `--dry-run`, which creates
+  nothing and prints `Would recreate`).
+
 ## 2.12.0 — 2026-11-13
 
 - SemVer scheme: breaking-change detection. relctl reads the pull request title, its description and its own commits:
