@@ -3,7 +3,7 @@
 Releases are made from the topmost `## X.Y.Z` heading (see [AGENTS.md](AGENTS.md)). Earlier releases are
 listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
-## 2.12.1
+## 2.12.1 — 2026-11-13
 
 - `relctl release forward` recreates the development branch at the head of the production branch when it does not
   exist. This happens when the repository deletes head branches on merge and the release pull request was
