@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v86/github"
@@ -44,4 +45,52 @@ func TestPullRequestCommitsReadsOnlyThePullRequest(t *testing.T) {
 		{SHA: "aaaa", Message: "fix: x"},
 		{SHA: "bbbb", Message: "fix: y\n\nBREAKING CHANGE: z"},
 	}, commits)
+}
+
+func commitsServer(t *testing.T, handler func(w http.ResponseWriter, r *http.Request, base string)) *GitHubRichClient {
+	t.Helper()
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		handler(w, r, srv.URL)
+	}))
+	t.Cleanup(srv.Close)
+	client := github.NewClient(nil)
+	base, err := url.Parse(srv.URL + "/")
+	require.NoError(t, err)
+	client.BaseURL = base
+	return &GitHubRichClient{Client: client, Owner: "example-org", Repository: "example-repo"}
+}
+
+func TestPullRequestCommitsCappedAt250(t *testing.T) {
+	ghrc := commitsServer(t, func(w http.ResponseWriter, r *http.Request, base string) {
+		page := r.URL.Query().Get("page")
+		n := 100
+		switch page {
+		case "", "1":
+			w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=2>; rel="next"`, base, r.URL.Path))
+		case "2":
+			w.Header().Set("Link", fmt.Sprintf(`<%s%s?page=3>; rel="next"`, base, r.URL.Path))
+		default:
+			n = 50
+		}
+		items := make([]string, n)
+		for i := range items {
+			items[i] = fmt.Sprintf(`{"sha":"p%s-%d","commit":{"message":"fix: x"}}`, page, i)
+		}
+		fmt.Fprint(w, "["+strings.Join(items, ",")+"]")
+	})
+	commits, err := ghrc.PullRequestCommits(7)
+	require.ErrorIs(t, err, ErrCommitsCapped)
+	require.Len(t, commits, 250)
+}
+
+func TestPullRequestCommitsServerError(t *testing.T) {
+	ghrc := commitsServer(t, func(w http.ResponseWriter, r *http.Request, _ string) {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprint(w, `{"message":"boom"}`)
+	})
+	commits, err := ghrc.PullRequestCommits(7)
+	require.Error(t, err)
+	require.Nil(t, commits)
 }

@@ -15,8 +15,8 @@ type SCMLayer struct {
 	// writes. Callers work with versions; the layer maps them to tags. It is set
 	// for a repository that tags "v1.2.3" and for every component ("whisper/...").
 	TagPrefix string
-	// BreakingMarkers is the breaking_markers setting of .relctl.yaml: "major"
-	// (also when empty), "warn" or "off".
+	// BreakingMarkers is the breaking_markers setting of .relctl.yaml: "major",
+	// "warn" (also when empty) or "off".
 	BreakingMarkers string
 }
 

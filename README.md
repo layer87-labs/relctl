@@ -88,18 +88,29 @@ Without a config file relctl uses SemVer from the branch prefix of the merged pu
 To override it, comment on the pull request before merging (the comment must start with the command):
 `relctl_patch_level: major` forces a bump level, `relctl_version_override: 2.1.0` pins the version.
 
-A breaking change is always a major release, whatever the branch prefix. relctl looks for a Conventional Commits
-breaking-change marker in the pull request and its own commits (not the merge commit, not the target branch):
+relctl also looks for a Conventional Commits breaking-change marker in the pull request and its own commits (not the
+merge commit, not the target branch):
 
 - `!` right after the type or scope of the pull request title or of a commit subject: `fix!: ...`, `fix(forms)!: ...`.
   A `!` elsewhere (`fix: handle foo!`) does not count.
-- a `BREAKING CHANGE:` or `BREAKING-CHANGE:` footer at the start of a line in the description or in a commit message.
-  A mention mid-sentence, in an indented line or in a fenced code block does not count.
+- a `BREAKING CHANGE: ` or `BREAKING-CHANGE: ` footer at the start of a line in the description or in a commit
+  message. A mention mid-sentence or in an indented line does not count, nor does anything inside a fenced code
+  block, an HTML comment (`<!-- -->`) or a `<details>` block. The description of a `renovate/` or `dependabot/`
+  pull request is not read (it quotes upstream release notes); its title and commits are.
 
-The marker only raises the bump, it never lowers it. Example: a pull request from `fix/forms-trusted-proxies`
-titled `fix(forms)!: only trust configured proxies` releases 1.9.1 → 2.0.0, not 1.9.2. `breaking_markers` in
-`.relctl.yaml` changes this: `warn` keeps the bump of the branch prefix and puts a warning in the log, the run
-summary (GitHub Actions) and on top of the release notes; `off` ignores the markers. Default: `major`.
+`breaking_markers` in `.relctl.yaml` decides what a marker does when the branch prefix gives a patch or minor bump:
+
+| `breaking_markers` | Effect |
+| --- | --- |
+| `warn` (default) | keeps the bump; warning in the log, the run summary (GitHub Actions) and on top of the release notes |
+| `major` | raises the bump to major; fails if the commits of the pull request cannot be read completely |
+| `off` | ignores the markers |
+
+The default becomes `major` in relctl 3.0.0; set `breaking_markers: major` to get it now. Example with `major`: a pull
+request from `fix/forms-trusted-proxies` titled `fix(forms)!: only trust configured proxies` releases 1.9.1 → 2.0.0,
+not 1.9.2. A marker never lowers a bump. With `relctl_version_override` the markers are not checked. GitHub lists at
+most 250 commits of a pull request; with more, `major` fails (comment `relctl_patch_level: major` or
+`relctl_version_override` instead) and `warn` warns.
 
 ## Reviewed releases (flow 3)
 
@@ -141,7 +152,7 @@ development_branch: dev      # default: the default branch of the repository
 tag_prefix: v
 
 # semver scheme: a breaking-change marker (fix!: or a BREAKING CHANGE: footer) on a fix/ or feat/ branch
-# major (default): raises the bump to major | warn: keeps the bump and warns | off: ignores the marker
+# warn (default): keeps the bump and warns | major: raises the bump to major (default from 3.0.0) | off: ignores it
 breaking_markers: major
 
 # independently released parts of the repository (own tags, own latest release, own counter)
@@ -178,7 +189,7 @@ release that is already published), `RELCTL_PRERELEASE`, `RELCTL_COMPONENT`, `RE
 ## Version schemes
 
 - **semver** (default): the bump comes from the branch prefix of the merged pull request (table above); a
-  breaking-change marker in the pull request makes it major (`breaking_markers`).
+  breaking-change marker in the pull request warns, or makes it major with `breaking_markers: major`.
 - **conventional-commits**: the bump comes from the commit messages since the last published release.
   `feat!:` or a `BREAKING CHANGE:` footer is major, `feat` is minor, `fix` and other types are patch.
   Squash-merged history only; the repository needs full history (`fetch-depth: 0`).

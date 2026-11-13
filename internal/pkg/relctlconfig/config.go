@@ -23,14 +23,14 @@ const (
 	DefaultBranch         = "main"
 
 	// BreakingMarkersMajor raises the SemVer bump of a pull request with a
-	// Conventional Commits breaking-change marker to major (default).
+	// Conventional Commits breaking-change marker to major (default from 3.0.0).
 	BreakingMarkersMajor = "major"
-	// BreakingMarkersWarn keeps the bump and warns in the log and the release notes.
+	// BreakingMarkersWarn keeps the bump and warns in the log and the release notes (default).
 	BreakingMarkersWarn = "warn"
 	// BreakingMarkersOff ignores breaking-change markers (the behaviour before 2.12.0).
 	BreakingMarkersOff = "off"
 	// DefaultBreakingMarkers is used when the config file does not set breaking_markers.
-	DefaultBreakingMarkers = BreakingMarkersMajor
+	DefaultBreakingMarkers = BreakingMarkersWarn
 )
 
 // Config holds the contents of a .relctl.yaml project config file.
@@ -59,8 +59,8 @@ type Config struct {
 	// BreakingMarkers decides what the semver scheme does with a Conventional
 	// Commits breaking-change marker ("fix!:" in the pull request title or a
 	// commit subject, a "BREAKING CHANGE:" footer) on a pull request whose
-	// branch prefix gives a patch or minor bump: "major" (default) raises the
-	// bump, "warn" keeps it and warns, "off" ignores the marker.
+	// branch prefix gives a patch or minor bump: "major" raises the bump,
+	// "warn" (default) keeps it and warns, "off" ignores the marker.
 	BreakingMarkers string `yaml:"breaking_markers"`
 }
 

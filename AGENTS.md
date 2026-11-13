@@ -54,8 +54,8 @@ internal/pkg/rcpersist          .relctl-connection.yaml written by `relctl conne
 ```
 
 **Version schemes** (`version_scheme` in `.relctl.yaml` or `--version-scheme`): `semver` (default,
-bump from the merged branch prefix, plus PR comment overrides, raised to major by a breaking-change marker
-in the PR title, description or its commits, see `breaking_markers`), `conventional-commits` (bump from
+bump from the merged branch prefix, plus PR comment overrides; a breaking-change marker in the PR title, description
+or its commits warns or raises the bump to major, see `breaking_markers`), `conventional-commits` (bump from
 commits since the last published release; squash-merge only), `calver` (`YYYYMM.DD.N` from local
 tags), `changelog` (topmost `## X.Y.Z — YYYY-MM-DD` heading of `CHANGELOG.md`). The choice is
 resolved in `service.argsToVersion`; each scheme has its own file or package and its own tests.

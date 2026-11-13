@@ -5,13 +5,14 @@ listed on the [releases page](https://github.com/layer87-labs/relctl/releases).
 
 ## 2.12.0
 
-- SemVer scheme: a breaking change is released as a major version, whatever the branch prefix. relctl reads the
-  pull request title, its description and its own commits: `fix!:` / `fix(scope)!:` in the title or a commit
-  subject, or a `BREAKING CHANGE:` / `BREAKING-CHANGE:` footer at the start of a line (not in a code block), raises
-  the bump to major. Before, a pull request from `fix/...` titled `fix(forms)!: ...` was released as a patch.
-  **Behaviour change:** a pull request that carries such a marker now gets a major release. `breaking_markers: warn`
-  in `.relctl.yaml` keeps the bump of the branch prefix and warns in the log, the GitHub Actions run summary and on
-  top of the release notes; `breaking_markers: off` restores the old behaviour.
+- SemVer scheme: breaking-change detection. relctl reads the pull request title, its description and its own commits:
+  `fix!:` / `fix(scope)!:` in the title or a commit subject, or a `BREAKING CHANGE: ` / `BREAKING-CHANGE: ` footer at
+  the start of a line (not in a code block, an HTML comment or a `<details>` block; the description of `renovate/`
+  and `dependabot/` pull requests is not read). Before, a pull request from `fix/...` titled `fix(forms)!: ...` was
+  released as a patch without notice. The new setting `breaking_markers` in `.relctl.yaml` decides what happens when
+  the branch prefix gives a patch or minor bump: `warn` (default) keeps the bump and warns in the log, the GitHub
+  Actions run summary and on top of the release notes; `major` raises the bump to major; `off` ignores the markers.
+  **The default becomes `major` in 3.0.0.** Set `breaking_markers: major` to get it now.
 - `relctl pr info` prints where the breaking-change marker was found.
 
 ## 2.11.0 — 2026-11-03

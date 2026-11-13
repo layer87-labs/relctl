@@ -99,11 +99,11 @@ func TestBreakingMarkers(t *testing.T) {
 
 	cfg, err := relctlconfig.Load(filepath.Join(t.TempDir(), "nonexistent.yaml"))
 	require.NoError(t, err)
-	assert.Equal(t, "major", cfg.BreakingMarkers)
+	assert.Equal(t, "warn", cfg.BreakingMarkers)
 
 	cfg, err = relctlconfig.Load(write("version_scheme: semver\n"))
 	require.NoError(t, err)
-	assert.Equal(t, "major", cfg.BreakingMarkers)
+	assert.Equal(t, "warn", cfg.BreakingMarkers)
 
 	for _, mode := range []string{"major", "warn", "off"} {
 		cfg, err = relctlconfig.Load(write("breaking_markers: " + mode + "\n"))

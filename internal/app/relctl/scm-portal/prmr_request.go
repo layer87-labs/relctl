@@ -1,7 +1,10 @@
 package scmportal
 
 import (
+	"strings"
+
 	"github.com/layer87-labs/relctl/internal/app/relctl/scm-portal/github"
+	"github.com/layer87-labs/relctl/internal/pkg/conventionalcommits"
 	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 
@@ -68,7 +71,8 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 	}
 
 	// The branch prefix, a relctl_patch_level comment and a breaking-change
-	// marker decide the bump.
+	// marker decide the bump. A version override pins the version: then the
+	// markers are not checked.
 	in := levelInput{
 		Branch:   infos.BranchName,
 		Override: patchLevel,
@@ -76,23 +80,30 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 		Body:     prInfos.GetBody(),
 		Mode:     lay.BreakingMarkers,
 	}
-	if in.Mode != relctlconfig.BreakingMarkersOff {
-		if in.Commits, err = grc.PullRequestCommits(infos.Number); err != nil {
+	if version != nil {
+		in.Mode = relctlconfig.BreakingMarkersOff
+	}
+	var fetchWarning string
+	if in.Mode != relctlconfig.BreakingMarkersOff && basePatchLevel(in.Branch, in.Override) != semver.Major {
+		in.Commits, fetchWarning, err = collectCommits(func() ([]conventionalcommits.Commit, error) {
+			return grc.PullRequestCommits(infos.Number)
+		}, in.Mode)
+		if err != nil {
 			return nil, err
 		}
 	}
 	decision := decidePatchLevel(in)
 	infos.PatchLevel = decision.Level
 	infos.BreakingMarker = decision.Marker
-	infos.BreakingWarning = decision.Warning
+	infos.BreakingWarning = strings.TrimSpace(fetchWarning + " " + decision.Warning)
 	if patchLevel != nil {
 		log.Infof("detected a patch level override to %s", *patchLevel)
 	}
 	if decision.Marker != "" {
 		log.Infof("breaking change marker found in %s", decision.Marker)
 	}
-	if decision.Warning != "" {
-		log.Warnln(decision.Warning)
+	if infos.BreakingWarning != "" {
+		log.Warnln(infos.BreakingWarning)
 	}
 
 	if version != nil {

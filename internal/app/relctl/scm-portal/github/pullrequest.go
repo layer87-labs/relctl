@@ -91,9 +91,16 @@ func pickPullRequest(candidates []*github.PullRequest, sha string) *github.PullR
 	return best
 }
 
+// maxPullRequestCommits is the most commits GitHub lists for a pull request.
+const maxPullRequestCommits = 250
+
+// ErrCommitsCapped means the pull request may have more commits than GitHub
+// lists; the commits returned with it are incomplete.
+var ErrCommitsCapped = fmt.Errorf("GitHub lists at most %d commits of a pull request, more may exist", maxPullRequestCommits)
+
 // PullRequestCommits returns the commits of a pull request, and only those:
-// neither the merge commit nor commits of the target branch. GitHub lists at
-// most 250 commits per pull request.
+// neither the merge commit nor commits of the target branch. With
+// ErrCommitsCapped it returns the commits GitHub listed.
 func (ghrc *GitHubRichClient) PullRequestCommits(prNumber int) ([]conventionalcommits.Commit, error) {
 	var commits []conventionalcommits.Commit
 	opts := &github.ListOptions{PerPage: 100}
@@ -106,8 +113,12 @@ func (ghrc *GitHubRichClient) PullRequestCommits(prNumber int) ([]conventionalco
 			commits = append(commits, conventionalcommits.Commit{SHA: c.GetSHA(), Message: c.GetCommit().GetMessage()})
 		}
 		if resp == nil || resp.NextPage == 0 {
-			return commits, nil
+			break
 		}
 		opts.Page = resp.NextPage
 	}
+	if len(commits) >= maxPullRequestCommits {
+		return commits, ErrCommitsCapped
+	}
+	return commits, nil
 }
