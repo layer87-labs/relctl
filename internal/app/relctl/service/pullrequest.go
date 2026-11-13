@@ -72,8 +72,12 @@ func PrintPRInfos(args *PrInfoArgs) {
 	fmt.Printf("Latest release version: %s\n", prInfos.LatestVersion)
 	if scheme == relctlconfig.SchemeSemVer {
 		fmt.Printf("Patch level: %s\n", prInfos.PatchLevel)
+		if prInfos.BreakingMarker != "" {
+			fmt.Printf("Breaking change marker: %s\n", prInfos.BreakingMarker)
+		}
 	}
 	fmt.Printf("Possible new release version: %s\n", prInfos.NextVersion)
+	reportBreakingWarning(scmLayer.CES, prInfos.BreakingWarning)
 }
 
 // previewVersion returns the version a pull request would release under a scheme

@@ -21,6 +21,16 @@ const (
 	ComponentTagSeparator = "/"
 	DefaultVersionScheme  = SchemeSemVer
 	DefaultBranch         = "main"
+
+	// BreakingMarkersMajor raises the SemVer bump of a pull request with a
+	// Conventional Commits breaking-change marker to major (default from 3.0.0).
+	BreakingMarkersMajor = "major"
+	// BreakingMarkersWarn keeps the bump and warns in the log and the release notes (default).
+	BreakingMarkersWarn = "warn"
+	// BreakingMarkersOff ignores breaking-change markers (the behaviour before 2.12.0).
+	BreakingMarkersOff = "off"
+	// DefaultBreakingMarkers is used when the config file does not set breaking_markers.
+	DefaultBreakingMarkers = BreakingMarkersWarn
 )
 
 // Config holds the contents of a .relctl.yaml project config file.
@@ -46,6 +56,12 @@ type Config struct {
 	// one container image each). A component has its own tags, its own latest
 	// release and its own counter.
 	Components map[string]Component `yaml:"components"`
+	// BreakingMarkers decides what the semver scheme does with a Conventional
+	// Commits breaking-change marker ("fix!:" in the pull request title or a
+	// commit subject, a "BREAKING CHANGE:" footer) on a pull request whose
+	// branch prefix gives a patch or minor bump: "major" raises the bump,
+	// "warn" (default) keeps it and warns, "off" ignores the marker.
+	BreakingMarkers string `yaml:"breaking_markers"`
 }
 
 // Component is an independently released part of a repository.
@@ -69,6 +85,8 @@ type Effective struct {
 	VersionScheme string
 	ChangelogFile string
 	Paths         []string
+	// BreakingMarkers is a repository-wide setting; components inherit it.
+	BreakingMarkers string
 }
 
 var componentName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
@@ -78,9 +96,10 @@ var componentName = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*$`)
 func (c *Config) Effective(component string) (*Effective, error) {
 	if component == "" {
 		return &Effective{
-			TagPrefix:     c.TagPrefix,
-			VersionScheme: c.VersionScheme,
-			ChangelogFile: c.ChangelogFile,
+			TagPrefix:       c.TagPrefix,
+			VersionScheme:   c.VersionScheme,
+			ChangelogFile:   c.ChangelogFile,
+			BreakingMarkers: c.BreakingMarkers,
 		}, nil
 	}
 	if !componentName.MatchString(component) {
@@ -91,11 +110,12 @@ func (c *Config) Effective(component string) (*Effective, error) {
 		return nil, fmt.Errorf("unknown component %q: %s", component, c.knownComponents())
 	}
 	eff := &Effective{
-		Component:     component,
-		TagPrefix:     comp.TagPrefix,
-		VersionScheme: comp.VersionScheme,
-		ChangelogFile: comp.ChangelogFile,
-		Paths:         comp.Paths,
+		Component:       component,
+		TagPrefix:       comp.TagPrefix,
+		VersionScheme:   comp.VersionScheme,
+		ChangelogFile:   comp.ChangelogFile,
+		Paths:           comp.Paths,
+		BreakingMarkers: c.BreakingMarkers,
 	}
 	if eff.TagPrefix == "" {
 		eff.TagPrefix = component + ComponentTagSeparator
@@ -123,6 +143,12 @@ func (c *Config) knownComponents() string {
 
 // validate rejects settings that would make tags ambiguous.
 func (c *Config) validate() error {
+	switch c.BreakingMarkers {
+	case BreakingMarkersMajor, BreakingMarkersWarn, BreakingMarkersOff:
+	default:
+		return fmt.Errorf("breaking_markers %q: use %q, %q or %q", c.BreakingMarkers,
+			BreakingMarkersMajor, BreakingMarkersWarn, BreakingMarkersOff)
+	}
 	seen := map[string]string{}
 	if c.TagPrefix != "" {
 		seen[c.TagPrefix] = "the repository"
@@ -172,8 +198,9 @@ func Load(path string) (*Config, error) {
 // defaults returns a Config pre-populated with the relctl defaults.
 func defaults() *Config {
 	return &Config{
-		VersionScheme: DefaultVersionScheme,
-		ChangelogFile: DefaultChangelogFile,
+		VersionScheme:   DefaultVersionScheme,
+		ChangelogFile:   DefaultChangelogFile,
+		BreakingMarkers: DefaultBreakingMarkers,
 	}
 }
 
@@ -185,6 +212,9 @@ func applyDefaults(cfg *Config) {
 	}
 	if cfg.ChangelogFile == "" {
 		cfg.ChangelogFile = DefaultChangelogFile
+	}
+	if cfg.BreakingMarkers == "" {
+		cfg.BreakingMarkers = DefaultBreakingMarkers
 	}
 	if cfg.ProductionBranch == "" {
 		cfg.ProductionBranch = cfg.DefaultBranch
