@@ -77,11 +77,11 @@ func TestCalVer_Validate(t *testing.T) {
 	}{
 		{"202606.11.1", true},
 		{"202606.11.42", true},
-		{"202606.1.1", true},    // day without leading zero
-		{"202606.11.0", false},  // N must be > 0
-		{"202606.11", false},    // missing N
-		{"v202606.11.1", false}, // prefix not valid
-		{"2026.06.11.1", false}, // old 4-part format no longer valid
+		{"202606.1.1", true},     // day without leading zero
+		{"202606.11.0", false},   // N must be > 0
+		{"202606.11", false},     // missing N
+		{"v202606.11.1", false},  // prefix not valid
+		{"2026.06.11.1", false},  // old 4-part format no longer valid
 		{"1.2.3", false},
 		{"", false},
 	}
