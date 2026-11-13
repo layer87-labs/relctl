@@ -89,3 +89,32 @@ func TestBranchSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "main", cfg.ProductionBranch)
 }
+
+func TestBreakingMarkers(t *testing.T) {
+	write := func(content string) string {
+		path := filepath.Join(t.TempDir(), ".relctl.yaml")
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+		return path
+	}
+
+	cfg, err := relctlconfig.Load(filepath.Join(t.TempDir(), "nonexistent.yaml"))
+	require.NoError(t, err)
+	assert.Equal(t, "warn", cfg.BreakingMarkers)
+
+	cfg, err = relctlconfig.Load(write("version_scheme: semver\n"))
+	require.NoError(t, err)
+	assert.Equal(t, "warn", cfg.BreakingMarkers)
+
+	for _, mode := range []string{"major", "warn", "off"} {
+		cfg, err = relctlconfig.Load(write("breaking_markers: " + mode + "\n"))
+		require.NoError(t, err, mode)
+		assert.Equal(t, mode, cfg.BreakingMarkers)
+		eff, err := cfg.Effective("")
+		require.NoError(t, err)
+		assert.Equal(t, mode, eff.BreakingMarkers)
+	}
+
+	path := write("breaking_markers: minor\n")
+	_, err = relctlconfig.Load(path)
+	require.EqualError(t, err, path+`: breaking_markers "minor": use "major", "warn" or "off"`)
+}

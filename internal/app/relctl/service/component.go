@@ -39,6 +39,7 @@ func applyNamespace(scmLayer *scmportal.SCMLayer, configFile, component, schemeO
 		}
 	}
 	scmLayer.TagPrefix = eff.TagPrefix
+	scmLayer.BreakingMarkers = eff.BreakingMarkers
 	return eff, nil
 }
 

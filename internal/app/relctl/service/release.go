@@ -41,6 +41,10 @@ type ReleaseArgs struct {
 	// Prerelease creates a release candidate (X.Y.Z-rc.N, marked as prerelease)
 	// for the computed version instead of the release itself.
 	Prerelease bool
+
+	// breakingWarning is set by the semver scheme when a breaking-change marker
+	// did not make the bump major (breaking_markers: warn).
+	breakingWarning string
 }
 
 func ReleaseCreate(args *ReleaseArgs) {
@@ -99,6 +103,7 @@ func ReleaseCreate(args *ReleaseArgs) {
 			return scmLayer.GenerateReleaseNotes(version, releaseTarget(args))
 		})
 	}
+	body = withBreakingWarning(body, args.breakingWarning)
 
 	if args.DryRun {
 		log.Infof("Would create new release with version: %s\n", version)
@@ -329,6 +334,8 @@ func argsToVersion(scmLayer *scmportal.SCMLayer, args *ReleaseArgs) (version, re
 		}
 
 		version = prInfos.NextVersion
+		args.breakingWarning = prInfos.BreakingWarning
+		reportBreakingWarning(scmLayer.CES, prInfos.BreakingWarning)
 
 		if err = prInfosToEnv(scmLayer, prInfos, relctlconfig.SchemeSemVer); err != nil {
 			log.Fatalln(err)

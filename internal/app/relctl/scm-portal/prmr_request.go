@@ -1,7 +1,10 @@
 package scmportal
 
 import (
+	"strings"
+
 	"github.com/layer87-labs/relctl/internal/app/relctl/scm-portal/github"
+	"github.com/layer87-labs/relctl/internal/pkg/conventionalcommits"
 	"github.com/layer87-labs/relctl/internal/pkg/relctlconfig"
 	"github.com/layer87-labs/relctl/internal/pkg/semver"
 
@@ -59,18 +62,48 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 		return infos, nil
 	}
 
-	// Parse the patch level from the branch name
-	if infos.PatchLevel, err = semver.ParsePatchLevelFormBranch(infos.BranchName); err != nil {
-		log.Warnln(err)
-	}
-	log.Traceln("completed PR standard information to: ", *infos)
-
 	// Read comments from the pull request or merge request
 	// and look for overrides
 	log.Traceln("read comments from pr/mr and looking for overrides")
 	version, patchLevel, err := lay.SearchIssuesForOverrides(infos.Number)
 	if err != nil {
 		return nil, err
+	}
+
+	// The branch prefix, a relctl_patch_level comment and a breaking-change
+	// marker decide the bump. A version override pins the version: then the
+	// markers are not checked.
+	in := levelInput{
+		Branch:   infos.BranchName,
+		Override: patchLevel,
+		Title:    prInfos.GetTitle(),
+		Body:     prInfos.GetBody(),
+		Mode:     lay.BreakingMarkers,
+	}
+	if version != nil {
+		in.Mode = relctlconfig.BreakingMarkersOff
+	}
+	var fetchWarning string
+	if in.Mode != relctlconfig.BreakingMarkersOff && basePatchLevel(in.Branch, in.Override) != semver.Major {
+		in.Commits, fetchWarning, err = collectCommits(func() ([]conventionalcommits.Commit, error) {
+			return grc.PullRequestCommits(infos.Number)
+		}, in.Mode)
+		if err != nil {
+			return nil, err
+		}
+	}
+	decision := decidePatchLevel(in)
+	infos.PatchLevel = decision.Level
+	infos.BreakingMarker = decision.Marker
+	infos.BreakingWarning = strings.TrimSpace(fetchWarning + " " + decision.Warning)
+	if patchLevel != nil {
+		log.Infof("detected a patch level override to %s", *patchLevel)
+	}
+	if decision.Marker != "" {
+		log.Infof("breaking change marker found in %s", decision.Marker)
+	}
+	if infos.BreakingWarning != "" {
+		log.Warnln(infos.BreakingWarning)
 	}
 
 	if version != nil {
@@ -92,11 +125,7 @@ func (lay SCMLayer) GetPrInfos(number int, mergeCommitSha string, scheme string)
 			infos.LatestVersion = repositoryRelease.BaseVersion()
 		}
 
-		if patchLevel != nil {
-			infos.PatchLevel = *patchLevel
-			log.Infof("detected a patch level override to %s", infos.PatchLevel)
-		}
-		// Increment the version based on the patch level override
+		// Increment the version by the decided patch level
 		if infos.NextVersion, err = semver.IncreaseVersion(infos.PatchLevel, infos.LatestVersion); err != nil {
 			return nil, err
 		}

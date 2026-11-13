@@ -28,7 +28,7 @@ Useful where relctl cannot detect the pipeline (GitLab CI with a GitHub reposito
 
 var githubCmd = &cobra.Command{
 	Use:   "github",
-	Short: "connect initial to a GitHub or GitHub Enterprise",
+	Short: "Connect to a GitHub or GitHub Enterprise instance",
 	Run: func(cmd *cobra.Command, args []string) {
 		connect.UpdateRcFileForGitHub(Server, Repository, Token)
 	},

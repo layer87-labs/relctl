@@ -49,12 +49,13 @@ internal/app/relctl/ces         code execution service detection (GitHub Actions
 internal/pkg/semver             bump levels, branch-prefix parsing
 internal/pkg/versioning         CalVer scheme
 internal/pkg/conventionalcommits  commit classification, git log walking
-internal/pkg/relctlconfig       .relctl.yaml (version_scheme, changelog_file, default_branch)
+internal/pkg/relctlconfig       .relctl.yaml (version_scheme, changelog_file, default_branch, breaking_markers)
 internal/pkg/rcpersist          .relctl-connection.yaml written by `relctl connect` (no token; legacy .awesomerc.yaml is read once and replaced)
 ```
 
 **Version schemes** (`version_scheme` in `.relctl.yaml` or `--version-scheme`): `semver` (default,
-bump from the merged branch prefix, plus PR comment overrides), `conventional-commits` (bump from
+bump from the merged branch prefix, plus PR comment overrides; a breaking-change marker in the PR title, description
+or its commits warns or raises the bump to major, see `breaking_markers`), `conventional-commits` (bump from
 commits since the last published release; squash-merge only), `calver` (`YYYYMM.DD.N` from local
 tags), `changelog` (topmost `## X.Y.Z — YYYY-MM-DD` heading of `CHANGELOG.md`). The choice is
 resolved in `service.argsToVersion`; each scheme has its own file or package and its own tests.
