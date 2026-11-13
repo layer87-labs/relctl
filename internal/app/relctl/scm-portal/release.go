@@ -130,6 +130,16 @@ func (lay SCMLayer) BranchSHA(branch string) (string, error) {
 	return lay.Grc.(*github.GitHubRichClient).BranchSHA(branch)
 }
 
+// BranchExists reports whether a branch exists.
+func (lay SCMLayer) BranchExists(branch string) (bool, error) {
+	return lay.Grc.(*github.GitHubRichClient).BranchExists(branch)
+}
+
+// CreateBranch creates a branch pointing to sha.
+func (lay SCMLayer) CreateBranch(branch, sha string) error {
+	return lay.Grc.(*github.GitHubRichClient).CreateBranch(branch, sha)
+}
+
 // CompareStatus compares head with base ("identical", "ahead", "behind", "diverged").
 func (lay SCMLayer) CompareStatus(base, head string) (string, error) {
 	return lay.Grc.(*github.GitHubRichClient).CompareStatus(base, head)

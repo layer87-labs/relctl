@@ -1,7 +1,11 @@
 package service
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+
+	"github.com/google/go-github/v86/github"
 
 	"github.com/layer87-labs/relctl/internal/app/relctl/ces"
 	scmportal "github.com/layer87-labs/relctl/internal/app/relctl/scm-portal"
@@ -59,6 +63,49 @@ func decideForward(status string) forwardAction {
 	}
 }
 
+// forwardAPI is the part of the SCM layer that comparing and recreating needs.
+type forwardAPI interface {
+	CompareStatus(base, head string) (string, error)
+	BranchExists(branch string) (bool, error)
+	BranchSHA(branch string) (string, error)
+	CreateBranch(branch, sha string) error
+}
+
+// compareOrRecreate compares production (from) with development (to). If the
+// comparison fails because the development branch does not exist (typically
+// deleted when the release pull request merged and the repository deletes head
+// branches on merge), it recreates the development branch at the production head,
+// which is a complete forward. Every other error is returned unchanged. With
+// dryRun nothing is created and the status is "ahead", as if it had been.
+func compareOrRecreate(api forwardAPI, from, to string, dryRun bool) (status string, recreated bool, err error) {
+	status, err = api.CompareStatus(to, from)
+	if err == nil {
+		return status, false, nil
+	}
+	var ghErr *github.ErrorResponse
+	if !errors.As(err, &ghErr) || ghErr.Response == nil || ghErr.Response.StatusCode != http.StatusNotFound {
+		return "", false, err
+	}
+	exists, existsErr := api.BranchExists(to)
+	if existsErr != nil || exists {
+		// the 404 has another cause (e.g. the production branch is missing)
+		return "", false, err
+	}
+	if dryRun {
+		log.Infof("branch %s does not exist, it would be recreated from %s", to, from)
+		return "ahead", false, nil
+	}
+	sha, shaErr := api.BranchSHA(from)
+	if shaErr != nil {
+		return "", false, shaErr
+	}
+	if createErr := api.CreateBranch(to, sha); createErr != nil {
+		return "", false, createErr
+	}
+	log.Infof("branch %s did not exist, recreated it at the head of %s (%s)", to, from, shortSha(sha))
+	return "identical", true, nil
+}
+
 // forwardBranches returns the production and development branch from flags and config.
 func forwardBranches(args *ForwardArgs, defaultBranch func() (string, error)) (from, to string, err error) {
 	cfgPath := args.ConfigFile
@@ -105,7 +152,7 @@ func ReleaseForward(args *ForwardArgs) {
 		log.Fatalln(err)
 	}
 
-	status, err := scmLayer.CompareStatus(to, from)
+	status, recreated, err := compareOrRecreate(scmLayer, from, to, args.DryRun)
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -120,6 +167,12 @@ func ReleaseForward(args *ForwardArgs) {
 		if err := scmLayer.CES.ExportAsEnv(vars); err != nil {
 			log.Fatalf("could not export env variables: %v", err)
 		}
+	}
+
+	if recreated {
+		fmt.Printf("%s did not exist and was recreated from %s\n", to, from)
+		export("recreated", "")
+		return
 	}
 
 	if action == forwardNothing {
